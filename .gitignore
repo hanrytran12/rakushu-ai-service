@@ -1,0 +1,38 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+secrets.json
+
+# Generated media files (avoid committing large binary audio/video)
+samples/*.mp4
+samples/*.wav
+*.mp4
+*.wav
+*.mp3
+*.mkv
+
+# Temporary files and logs
+*.log
+temp/
+tmp/
+
+# IDE / Editor / OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
