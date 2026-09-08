@@ -1,9 +1,9 @@
 """Rakushu AI Service: End-to-End ASR -> NLP -> Bunsetsu & OOV Pipeline Runner."""
 import sys
 import os
-import json
+import time
 import logging
-from datetime import datetime
+from typing import List
 
 # Adjust module search path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -18,6 +18,7 @@ if sys.stdout.encoding != "utf-8":
 
 from src import (
     SubtitleSegment,
+    SentenceSubtitle,
     PipelineResult,
     AsrService,
     NlpService,
@@ -31,81 +32,118 @@ logger = logging.getLogger("RakushuPipeline")
 
 
 def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> PipelineResult:
+    total_start_time = time.time()
     print("\n" + "=" * 80)
-    print(" [RAKUSHU AI CORE] ASR -> NLP -> BUNSETSU & OOV PIPELINE EXECUTION")
+    print(" [RAKUSHU AI CORE] ASR -> GINZA NLP -> SENTENCE TRANSLATION PIPELINE")
     print("=" * 80)
 
     # 1. ASR Transcription via Whisper
+    t0 = time.time()
     logger.info(">>> STEP 1: Processing video via Whisper ASR...")
     asr_svc = AsrService()
-    segment = asr_svc.transcribe(media_path)
-    logger.info(f"   [ASR Result] Duration: {segment.start_time:.1f}s -> {segment.end_time:.1f}s")
-    logger.info(f"   [Transcription]: \"{segment.text}\"")
+    full_segment = asr_svc.transcribe(media_path)
+    logger.info(f"   [ASR Result] Duration: {full_segment.start_time:.1f}s -> {full_segment.end_time:.1f}s")
+    logger.info(f"   [Transcription]: \"{full_segment.text}\"")
+    logger.info(f"   [STEP 1 COMPLETED] Time: {time.time() - t0:.2f}s")
 
-    # 2. NLP Morphological Analysis
-    logger.info("\n>>> STEP 2: Feeding transcription to NLP morphological engine...")
-    nlp_svc = NlpService()
-    tokens = nlp_svc.tokenize(segment)
-    logger.info(f"   Extracted {len(tokens)} tokens:")
-    print(f"   {'Surface':<14} | {'POS':<14} | {'Lemma':<12} | {'Reading':<14} | {'Romaji'}")
-    print("   " + "-" * 70)
-    for tok in tokens:
-        print(f"   {tok.surface:<14} | {tok.pos:<14} | {tok.lemma:<12} | {tok.reading:<14} | {tok.romaji}")
+    # Initialize Services
+    nlp_svc, knowledge_svc = NlpService(), KnowledgeService()
+    llm_svc, bunsetsu_svc = LlmEnrichmentService(), BunsetsuService()
 
-    # 3. Knowledge Base Matching & OOV Detection
-    logger.info("\n>>> STEP 3: Cross-referencing tokens against Knowledge Base (JMDict sidecar)...")
-    knowledge_svc = KnowledgeService()
-    matched_knowledge, oov_tokens = knowledge_svc.match_tokens(tokens)
+    # 2. Stage 1: Full Transcription Translation for Global Context
+    t1 = time.time()
+    logger.info("\n>>> STEP 2: Translating full transcription for overarching global context...")
+    full_translation = llm_svc.translate_full_transcription(full_segment.text)
+    full_segment.translation = full_translation
+    logger.info(f"   [Global Translation (VI)]: \"{full_translation}\"")
+    logger.info(f"   [STEP 2 COMPLETED] Time: {time.time() - t1:.2f}s")
 
-    logger.info(f"   [Knowledge Hit] Found {len(matched_knowledge)} known terms in dictionary:")
-    for k in matched_knowledge:
-        print(f"     [OK] {k.term} ({k.reading}, {k.pos}) [{k.jlpt_level}]: {k.meaning}")
+    # 3. Split Transcription into Sentences via GiNZA
+    t2 = time.time()
+    logger.info("\n>>> STEP 3: Splitting transcription into sentences via GiNZA...")
+    sentence_texts = nlp_svc.split_sentences(full_segment.text)
+    logger.info(f"   Identified {len(sentence_texts)} discrete sentences. Time: {time.time() - t2:.2f}s")
 
-    logger.info(f"   [OOV Flagged] Detected {len(oov_tokens)} Out-Of-Vocabulary candidate tokens:")
-    for oov in oov_tokens:
-        print(f"     [!] [OOV Candidate] Surface: \"{oov.surface}\" | POS: {oov.pos} | Reading: {oov.reading}")
+    total_chars = max(len(full_segment.text), 1)
+    total_dur = full_segment.end_time - full_segment.start_time
+    curr_char = 0
+    sentence_subtitles, all_tokens, all_matched, all_bunsetsu = [], [], [], []
 
-    # 4. LLM Contextual Translation & OOV Learning
-    logger.info("\n>>> STEP 4: Calling LLM for Contextual Translation & OOV Schema Enrichment...")
-    llm_svc = LlmEnrichmentService()
-    translation_vi, enriched_oovs = llm_svc.enrich_and_learn_oov(segment.text, matched_knowledge, oov_tokens)
-    logger.info(f"   [Full Translation (VI)]: \"{translation_vi}\"")
-    logger.info(f"   [Learned OOV Structured Output]: {len(enriched_oovs)} candidates formatted to DICTIONARY_ENTRY schema:")
-    for cand in enriched_oovs:
-        print(f"     [*] Term: {cand.term:<12} | POS: {cand.suggested_pos:<8} | Meaning: {cand.suggested_meaning}")
+    # 4. Stage 2: Sentence-by-Sentence Contextual Translation & Token Meaning Extraction
+    t3 = time.time()
+    for idx, sent_text in enumerate(sentence_texts, start=1):
+        s_t0 = time.time()
+        sent_len = len(sent_text)
+        s_start = round(full_segment.start_time + (curr_char / total_chars) * total_dur, 2)
+        curr_char += sent_len
+        s_end = round(full_segment.start_time + (curr_char / total_chars) * total_dur, 2)
 
-    # 5. Bunsetsu Grouping (Post-processing)
-    logger.info("\n>>> STEP 5: Bunsetsu Grouping Engine (Jiritsugo + Fuzokugo clusters)...")
-    bunsetsu_svc = BunsetsuService()
-    bunsetsu_phrases = bunsetsu_svc.group_bunsetsu(segment, tokens)
-    logger.info(f"   Generated {len(bunsetsu_phrases)} interactive Bunsetsu phrase units for Learner UI:")
-    print(f"   {'Order':<5} | {'Timestamp':<14} | {'Bunsetsu Text':<22} | {'Learner Chunk Meaning'}")
-    print("   " + "-" * 75)
-    for bp in bunsetsu_phrases:
-        time_span = f"{bp.start_time:.1f}s - {bp.end_time:.1f}s"
-        print(f"   #{bp.phrase_order:<4} | {time_span:<14} | {bp.text:<22} | {bp.translation}")
+        sent_seg = SubtitleSegment(
+            segment_id=f"{full_segment.segment_id}-s{idx}",
+            video_id=full_segment.video_id, start_time=s_start,
+            end_time=s_end, text=sent_text, sequence_number=idx,
+        )
+        logger.info(f"\n--- Processing Sentence #{idx} [{s_start:.1f}s - {s_end:.1f}s]: \"{sent_text}\" ---")
 
-    # Final Outcome packaging
+        # Step A: NLP Morphological Analysis
+        tokens = nlp_svc.tokenize(sent_seg)
+        # Step B: Knowledge Matching & OOV Detection
+        matched_k, oov_toks = knowledge_svc.match_tokens(tokens)
+        all_matched.extend(matched_k)
+
+        # Step C: Sentence Translation guided by Global Context & Token Meanings
+        s_trans_vi, token_meanings, enriched_oovs = llm_svc.translate_sentence_with_context(
+            sentence_text=sent_text, full_text=full_segment.text,
+            full_translation=full_translation, tokens=tokens,
+            matched_knowledge=matched_k, oov_tokens=oov_toks
+        )
+        sent_seg.translation = s_trans_vi
+        logger.info(f"   [Sentence Translation (VI)]: \"{s_trans_vi}\"")
+
+        # Step D: Assign Contextual Meanings to Tokens
+        for tok in tokens:
+            if tok.surface in token_meanings:
+                tok.context_meaning = token_meanings[tok.surface]
+        all_tokens.extend(tokens)
+
+        # Step E: Bunsetsu Grouping with contextual token meanings
+        phrases = bunsetsu_svc.group_bunsetsu(sent_seg, tokens, token_meanings)
+        all_bunsetsu.extend(phrases)
+
+        sentence_subtitles.append(SentenceSubtitle(
+            segment=sent_seg, translation=s_trans_vi, tokens=tokens,
+            matched_knowledge=matched_k, oov_candidates=enriched_oovs, bunsetsu_phrases=phrases,
+        ))
+        logger.info(f"   [Sentence #{idx} Done] Elapsed: {time.time() - s_t0:.2f}s")
+    logger.info(f"   [STEP 4 COMPLETED] All sentences translated in: {time.time() - t3:.2f}s")
+
+    # 5. Assemble Consolidated Pipeline Result
     result = PipelineResult(
-        segment=segment,
-        tokens=tokens,
-        matched_knowledge=matched_knowledge,
-        oov_candidates=enriched_oovs,
-        bunsetsu_phrases=bunsetsu_phrases
+        segment=full_segment, full_translation=full_translation,
+        tokens=all_tokens, matched_knowledge=all_matched,
+        oov_candidates=[o for s in sentence_subtitles for o in s.oov_candidates],
+        bunsetsu_phrases=all_bunsetsu, sentences=sentence_subtitles,
     )
 
+    # 6. Display Summary Report
     print("\n" + "=" * 80)
-    print(" [OUTCOME] PIPELINE OUTCOME FOR UI & CURATOR DASHBOARD:")
+    print(" [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:")
     print("=" * 80)
-    print(f"- Transcription: \"{result.segment.text}\"")
-    print(f"- Vietnamese Meaning: \"{translation_vi}\"")
-    print(f"- Bunsetsu Overlay Clusters ({len(result.bunsetsu_phrases)} chunks):")
-    for bp in result.bunsetsu_phrases:
-        print(f"   [{bp.text}] -> {bp.translation}")
-    print(f"- System OOV Candidates for Curator Review ({len(result.oov_candidates)} items):")
-    for o in result.oov_candidates:
-        print(f"   - [Candidate ID: {o.oov_candidate_id[:8]}] Term: {o.term} | POS: {o.suggested_pos} | Meaning: {o.suggested_meaning}")
+    print(f"Global Transcript: \"{result.segment.text}\"")
+    print(f"Global Translation: \"{result.full_translation}\"")
+    for idx, s in enumerate(result.sentences, start=1):
+        print(f"\n[Sentence #{idx}] ({s.segment.start_time:.1f}s -> {s.segment.end_time:.1f}s)")
+        print(f"  JP: {s.segment.text}\n  VI: {s.translation}")
+        print("  Token-level contextual meanings:")
+        for t in s.tokens:
+            if t.context_meaning:
+                print(f"    - {t.surface} ({t.pos}): {t.context_meaning}")
+        print("  Bunsetsu interactive chunks:")
+        for bp in s.bunsetsu_phrases:
+            print(f"    * [{bp.text}] ({bp.start_time:.1f}s-{bp.end_time:.1f}s) -> {bp.translation}")
 
+    total_elapsed = time.time() - total_start_time
+    logger.info(f"\n>>> [PIPELINE COMPLETED] Total processing time for video: {total_elapsed:.2f}s")
     return result
 
 
@@ -117,3 +155,4 @@ if __name__ == "__main__":
         create_media.create_sample_media(media_file)
 
     run_pipeline(media_file)
+

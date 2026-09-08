@@ -1,6 +1,13 @@
 """Bunsetsu Grouping Service: Japanese phrase boundary segmentation and alignment."""
-from typing import List, Dict
+from typing import List, Dict, Optional
 from src import TokenModel, BunsetsuPhrase, SubtitleSegment
+
+try:
+    import spacy
+    import ginza
+    _GINZA_AVAILABLE = True
+except ImportError:
+    _GINZA_AVAILABLE = False
 
 
 class BunsetsuService:
@@ -20,20 +27,96 @@ class BunsetsuService:
         "話します。": "sẽ nói chuyện / trò chuyện.",
     }
 
-    def group_bunsetsu(self, segment: SubtitleSegment, tokens: List[TokenModel]) -> List[BunsetsuPhrase]:
+    def __init__(self):
+        self._nlp = None
+        if _GINZA_AVAILABLE:
+            try:
+                self._nlp = spacy.load("ja_ginza")
+            except Exception:
+                self._nlp = None
+
+    def group_bunsetsu(
+        self,
+        segment: SubtitleSegment,
+        tokens: List[TokenModel],
+        token_meanings: Optional[Dict[str, str]] = None
+    ) -> List[BunsetsuPhrase]:
         """Partitions sequential tokens into Bunsetsu phrases with timestamps and meanings."""
+        if self._nlp is not None and segment.text:
+            try:
+                return self._group_bunsetsu_ginza(segment, tokens, token_meanings)
+            except Exception:
+                pass
+        return self._group_bunsetsu_rules(segment, tokens, token_meanings)
+
+    def _group_bunsetsu_ginza(
+        self,
+        segment: SubtitleSegment,
+        tokens: List[TokenModel],
+        token_meanings: Optional[Dict[str, str]] = None
+    ) -> List[BunsetsuPhrase]:
+        doc = self._nlp(segment.text)
+        spans = list(ginza.bunsetu_spans(doc))
+        if not spans:
+            return self._group_bunsetsu_rules(segment, tokens, token_meanings)
+
+        total_chars = max(len(segment.text), 1)
+        duration = segment.end_time - segment.start_time
+        phrases: List[BunsetsuPhrase] = []
+
+        for idx, span in enumerate(spans, start=1):
+            start_pos = span.start_char
+            end_pos = span.end_char
+            text = span.text
+
+            matched_surfaces = [
+                t.surface for t in tokens
+                if t.start_position >= start_pos and t.end_position <= end_pos
+            ]
+            if not matched_surfaces:
+                matched_surfaces = [t.orth_ for t in span]
+
+            start_time = round(segment.start_time + (start_pos / total_chars) * duration, 2)
+            end_time = round(segment.start_time + (end_pos / total_chars) * duration, 2)
+            meaning = self.PHRASE_TRANSLATIONS.get(
+                text, self._generate_span_meaning(span, token_meanings)
+            )
+
+            phrases.append(BunsetsuPhrase(
+                segment_id=segment.segment_id,
+                text=text,
+                translation=meaning,
+                start_time=start_time,
+                end_time=end_time,
+                phrase_order=idx,
+                token_surfaces=matched_surfaces
+            ))
+
+        return phrases
+
+    def _generate_span_meaning(self, span, token_meanings: Optional[Dict[str, str]] = None) -> str:
+        meanings = []
+        tm = token_meanings or {}
+        for t in span:
+            if t.pos_ not in ("PUNCT",):
+                m = tm.get(t.orth_, tm.get(t.lemma_, t.lemma_))
+                if m:
+                    meanings.append(m)
+        return " + ".join(meanings) if meanings else span.text
+
+    def _group_bunsetsu_rules(self, segment: SubtitleSegment, tokens: List[TokenModel]) -> List[BunsetsuPhrase]:
         phrases: List[BunsetsuPhrase] = []
         current_cluster: List[TokenModel] = []
+        order = 1
 
-        def flush_cluster(cluster: List[TokenModel], order: int):
+        def flush(cluster: List[TokenModel], ord_num: int) -> Optional[BunsetsuPhrase]:
             if not cluster:
                 return None
             combined_text = "".join(t.surface for t in cluster)
             meaning = self.PHRASE_TRANSLATIONS.get(
                 combined_text,
-                self._generate_cluster_meaning(cluster)
+                " + ".join(t.lemma for t in cluster if t.pos != "PUNCTUATION")
             )
-            # Distribute time proportionally across segment duration
             total_chars = max(len(segment.text), 1)
             start_ratio = cluster[0].start_position / total_chars
             end_ratio = cluster[-1].end_position / total_chars
@@ -45,52 +128,36 @@ class BunsetsuService:
                 translation=meaning,
                 start_time=round(segment.start_time + start_ratio * duration, 2),
                 end_time=round(segment.start_time + end_ratio * duration, 2),
-                phrase_order=order,
+                phrase_order=ord_num,
                 token_surfaces=[t.surface for t in cluster]
             )
 
-        order = 1
         for token in tokens:
-            # Punctuation attaches to the preceding word
             if token.pos == "PUNCTUATION":
                 current_cluster.append(token)
-                phrase = flush_cluster(current_cluster, order)
-                if phrase:
-                    phrases.append(phrase)
+                p = flush(current_cluster, order)
+                if p:
+                    phrases.append(p)
                     order += 1
                 current_cluster = []
                 continue
 
-            # Start of a new Jiritsugo (content word) triggers boundary flush
-            # Note: Consecutive NOUNs (e.g. 若者 + 言葉) and NOUN + する (e.g. 勉強 + する) stay together
             if token.pos in self.JIRITSUGO_POS:
-                is_compound_noun = (
-                    token.pos == "NOUN" and
-                    current_cluster and
-                    all(t.pos == "NOUN" for t in current_cluster)
-                )
-                is_suru_verb = (
-                    token.lemma == "する" and
-                    current_cluster and
-                    current_cluster[-1].pos == "NOUN"
-                )
-                if current_cluster and not (is_compound_noun or is_suru_verb):
-                    phrase = flush_cluster(current_cluster, order)
-                    if phrase:
-                        phrases.append(phrase)
+                is_compound = (token.pos == "NOUN" and current_cluster and all(t.pos == "NOUN" for t in current_cluster))
+                is_suru = (token.lemma == "する" and current_cluster and current_cluster[-1].pos == "NOUN")
+                if current_cluster and not (is_compound or is_suru):
+                    p = flush(current_cluster, order)
+                    if p:
+                        phrases.append(p)
                         order += 1
                     current_cluster = []
 
             current_cluster.append(token)
 
-        # Flush any remaining tokens
         if current_cluster:
-            phrase = flush_cluster(current_cluster, order)
-            if phrase:
-                phrases.append(phrase)
+            p = flush(current_cluster, order)
+            if p:
+                phrases.append(p)
 
         return phrases
 
-    def _generate_cluster_meaning(self, cluster: List[TokenModel]) -> str:
-        meanings = [t.lemma for t in cluster if t.pos != "PUNCTUATION"]
-        return " + ".join(meanings)
