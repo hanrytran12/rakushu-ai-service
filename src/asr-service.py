@@ -45,7 +45,7 @@ class AsrService:
             try:
                 from faster_whisper import WhisperModel
                 model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
-                prompt = "こんにちは。ポッドキャスト。若者言葉。日本語の書き起こしです。"
+                prompt = "こんにちは。日本語の書き起こしです。"
                 segments, info = model.transcribe(
                     wav_path,
                     language="ja",

@@ -13,6 +13,9 @@ class SubtitleSegment:
     text: str = ""
     translation: str = ""
     sequence_number: int = 1
+    video_title: str = ""
+    source_url: str = ""
+    video_path: str = ""
 
     def to_dict(self):
         return asdict(self)

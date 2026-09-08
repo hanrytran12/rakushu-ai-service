@@ -17,6 +17,7 @@ NlpService = importlib.import_module(".nlp-service", package=__name__).NlpServic
 KnowledgeService = importlib.import_module(".knowledge-service", package=__name__).KnowledgeService
 LlmEnrichmentService = importlib.import_module(".llm-service", package=__name__).LlmEnrichmentService
 BunsetsuService = importlib.import_module(".bunsetsu-service", package=__name__).BunsetsuService
+YouTubeService = importlib.import_module(".youtube-service", package=__name__).YouTubeService
 
 __all__ = [
     "SubtitleSegment",
@@ -31,4 +32,5 @@ __all__ = [
     "KnowledgeService",
     "LlmEnrichmentService",
     "BunsetsuService",
+    "YouTubeService",
 ]
