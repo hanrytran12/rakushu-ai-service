@@ -25,6 +25,7 @@ from src import (
     KnowledgeService,
     LlmEnrichmentService,
     BunsetsuService,
+    YouTubeService,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -37,11 +38,31 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     print(" [RAKUSHU AI CORE] ASR -> GINZA NLP -> SENTENCE TRANSLATION PIPELINE")
     print("=" * 80)
 
+    # 0. Detect YouTube URL and Download MP4 directly
+    youtube_svc = YouTubeService()
+    video_meta = {}
+    media_file_path = media_path
+    if youtube_svc.is_youtube_url(media_path):
+        logger.info(f">>> DETECTED YOUTUBE URL: {media_path}")
+        logger.info(">>> Downloading YouTube video (.mp4 format)...")
+        yt_t0 = time.time()
+        media_file_path, video_meta = youtube_svc.download_video(media_path)
+        logger.info(f"   [YouTube Video Download Completed] In: {time.time() - yt_t0:.2f}s")
+        logger.info(f"   [Saved MP4 Path]: {media_file_path}")
+        logger.info(f"   [Video Title]: \"{video_meta.get('title', '')}\"")
+
     # 1. ASR Transcription via Whisper
     t0 = time.time()
     logger.info(">>> STEP 1: Processing video via Whisper ASR...")
     asr_svc = AsrService()
-    full_segment = asr_svc.transcribe(media_path)
+    full_segment = asr_svc.transcribe(media_file_path)
+    if video_meta:
+        full_segment.video_id = video_meta.get("video_id", full_segment.video_id)
+        full_segment.video_title = video_meta.get("title", "")
+        full_segment.source_url = media_path
+        full_segment.video_path = media_file_path
+    elif os.path.exists(media_path):
+        full_segment.video_path = media_path
     logger.info(f"   [ASR Result] Duration: {full_segment.start_time:.1f}s -> {full_segment.end_time:.1f}s")
     logger.info(f"   [Transcription]: \"{full_segment.text}\"")
     logger.info(f"   [STEP 1 COMPLETED] Time: {time.time() - t0:.2f}s")
@@ -49,6 +70,10 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     # Initialize Services
     nlp_svc, knowledge_svc = NlpService(), KnowledgeService()
     llm_svc, bunsetsu_svc = LlmEnrichmentService(), BunsetsuService()
+
+    if not full_segment.text.strip():
+        logger.warning("   [ASR Notice] No speech detected in media. Returning empty result.")
+        return PipelineResult(segment=full_segment, full_translation="", tokens=[], matched_knowledge=[], oov_candidates=[], bunsetsu_phrases=[], sentences=[])
 
     # 2. Stage 1: Full Transcription Translation for Global Context
     t1 = time.time()
@@ -80,7 +105,11 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
         sent_seg = SubtitleSegment(
             segment_id=f"{full_segment.segment_id}-s{idx}",
-            video_id=full_segment.video_id, start_time=s_start,
+            video_id=full_segment.video_id,
+            video_title=full_segment.video_title,
+            source_url=full_segment.source_url,
+            video_path=full_segment.video_path,
+            start_time=s_start,
             end_time=s_end, text=sent_text, sequence_number=idx,
         )
         logger.info(f"\n--- Processing Sentence #{idx} [{s_start:.1f}s - {s_end:.1f}s]: \"{sent_text}\" ---")
@@ -142,6 +171,12 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         for bp in s.bunsetsu_phrases:
             print(f"    * [{bp.text}] ({bp.start_time:.1f}s-{bp.end_time:.1f}s) -> {bp.translation}")
 
+    if result.segment.source_url:
+        print(f"\nSource URL: {result.segment.source_url}")
+        print(f"Video Title: {result.segment.video_title}")
+    if result.segment.video_path:
+        print(f"Video Path: {result.segment.video_path}")
+
     total_elapsed = time.time() - total_start_time
     logger.info(f"\n>>> [PIPELINE COMPLETED] Total processing time for video: {total_elapsed:.2f}s")
     return result
@@ -149,7 +184,8 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
 if __name__ == "__main__":
     media_file = sys.argv[1] if len(sys.argv) > 1 else "samples/japanese_podcast_10s.mp4"
-    if not os.path.exists(media_file):
+    yt_svc = YouTubeService()
+    if not yt_svc.is_youtube_url(media_file) and not os.path.exists(media_file):
         import importlib
         create_media = importlib.import_module("samples.create-sample-media")
         create_media.create_sample_media(media_file)
