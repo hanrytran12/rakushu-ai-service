@@ -8,6 +8,7 @@ TokenModel = _schema.TokenModel
 DictionaryEntry = _schema.DictionaryEntry
 OovCandidate = _schema.OovCandidate
 BunsetsuPhrase = _schema.BunsetsuPhrase
+SentenceSubtitle = _schema.SentenceSubtitle
 PipelineResult = _schema.PipelineResult
 
 # Services
@@ -23,6 +24,7 @@ __all__ = [
     "DictionaryEntry",
     "OovCandidate",
     "BunsetsuPhrase",
+    "SentenceSubtitle",
     "PipelineResult",
     "AsrService",
     "NlpService",

@@ -11,6 +11,7 @@ class SubtitleSegment:
     start_time: float = 0.0
     end_time: float = 10.0
     text: str = ""
+    translation: str = ""
     sequence_number: int = 1
 
     def to_dict(self):
@@ -28,6 +29,7 @@ class TokenModel:
     romaji: str = ""
     start_position: int = 0
     end_position: int = 0
+    context_meaning: str = ""
 
     def to_dict(self):
         return asdict(self)
@@ -78,18 +80,45 @@ class BunsetsuPhrase:
 
 
 @dataclass
-class PipelineResult:
-    segment: SubtitleSegment
-    tokens: List[TokenModel]
-    matched_knowledge: List[DictionaryEntry]
-    oov_candidates: List[OovCandidate]
-    bunsetsu_phrases: List[BunsetsuPhrase]
+class SentenceSubtitle:
+    """Represents a standalone subtitle sentence with translation and bunsetsu chunks."""
+    sentence_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    segment: SubtitleSegment = field(default_factory=SubtitleSegment)
+    translation: str = ""
+    tokens: List[TokenModel] = field(default_factory=list)
+    matched_knowledge: List[DictionaryEntry] = field(default_factory=list)
+    oov_candidates: List[OovCandidate] = field(default_factory=list)
+    bunsetsu_phrases: List[BunsetsuPhrase] = field(default_factory=list)
 
     def to_dict(self):
         return {
+            "sentence_id": self.sentence_id,
             "segment": self.segment.to_dict(),
+            "translation": self.translation,
             "tokens": [t.to_dict() for t in self.tokens],
             "matched_knowledge": [k.to_dict() for k in self.matched_knowledge],
             "oov_candidates": [o.to_dict() for o in self.oov_candidates],
             "bunsetsu_phrases": [p.to_dict() for p in self.bunsetsu_phrases],
+        }
+
+
+@dataclass
+class PipelineResult:
+    segment: SubtitleSegment
+    full_translation: str = ""
+    tokens: List[TokenModel] = field(default_factory=list)
+    matched_knowledge: List[DictionaryEntry] = field(default_factory=list)
+    oov_candidates: List[OovCandidate] = field(default_factory=list)
+    bunsetsu_phrases: List[BunsetsuPhrase] = field(default_factory=list)
+    sentences: List[SentenceSubtitle] = field(default_factory=list)
+
+    def to_dict(self):
+        return {
+            "segment": self.segment.to_dict(),
+            "full_translation": self.full_translation,
+            "tokens": [t.to_dict() for t in self.tokens],
+            "matched_knowledge": [k.to_dict() for k in self.matched_knowledge],
+            "oov_candidates": [o.to_dict() for o in self.oov_candidates],
+            "bunsetsu_phrases": [p.to_dict() for p in self.bunsetsu_phrases],
+            "sentences": [s.to_dict() for s in self.sentences],
         }

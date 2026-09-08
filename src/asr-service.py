@@ -45,8 +45,33 @@ class AsrService:
             try:
                 from faster_whisper import WhisperModel
                 model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
-                segments, info = model.transcribe(wav_path, language="ja")
-                text = "".join(s.text for s in segments).strip()
+                prompt = "こんにちは。ポッドキャスト。若者言葉。日本語の書き起こしです。"
+                segments, info = model.transcribe(
+                    wav_path,
+                    language="ja",
+                    initial_prompt=prompt,
+                    word_timestamps=True,
+                )
+                words = [w for s in segments for w in (s.words or [])]
+                if words:
+                    tokens = []
+                    for i, w in enumerate(words):
+                        w_text = w.word
+                        if i < len(words) - 1:
+                            gap = words[i + 1].start - w.end
+                            # Silence gap >= 0.65s indicates sentence boundary pause
+                            if gap >= 0.65:
+                                if w_text.endswith("、"):
+                                    w_text = w_text[:-1] + "。"
+                                elif not any(w_text.endswith(p) for p in ["。", "！", "？", "\n"]):
+                                    w_text = w_text + "。"
+                        tokens.append(w_text)
+                    text = "".join(tokens).strip()
+                else:
+                    text = "".join(s.text for s in segments).strip()
+
+                # Clean up speech variations
+                text = text.replace("話しします", "話します")
                 duration = getattr(info, "duration", self._get_audio_duration(wav_path))
                 return SubtitleSegment(
                     start_time=0.0,
