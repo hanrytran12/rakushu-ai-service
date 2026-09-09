@@ -11,14 +11,14 @@ class KnowledgeService:
     DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "dictionary.db")
 
     CORE_FALLBACK: Dict[str, DictionaryEntry] = {
-        "皆さん": DictionaryEntry(term="皆さん", reading="みなさん", pos="NOUN", meaning="mọi người", commonality=1),
-        "こんにちは": DictionaryEntry(term="こんにちは", reading="こんにちは", pos="INTERJECTION", meaning="xin chào", commonality=1),
-        "今日": DictionaryEntry(term="今日", reading="きょう", pos="NOUN", meaning="hôm nay", commonality=1),
-        "日本": DictionaryEntry(term="日本", reading="にほん", pos="NOUN", meaning="Nhật Bản", commonality=1),
-        "面白い": DictionaryEntry(term="面白い", reading="おもしろい", pos="ADJECTIVE", meaning="thú vị", commonality=1),
-        "話す": DictionaryEntry(term="話す", reading="はなす", pos="VERB", meaning="nói, trò chuyện", commonality=1),
-        "話します": DictionaryEntry(term="話します", reading="はなします", pos="VERB", meaning="nói chuyện", commonality=1),
-        "について": DictionaryEntry(term="について", reading="について", pos="PARTICLE", meaning="về", commonality=1),
+        "皆さん": DictionaryEntry(term="皆さん", reading="みなさん", pos="NOUN", meaning="mọi người", score=1),
+        "こんにちは": DictionaryEntry(term="こんにちは", reading="こんにちは", pos="INTERJECTION", meaning="xin chào", score=1),
+        "今日": DictionaryEntry(term="今日", reading="きょう", pos="NOUN", meaning="hôm nay", score=1),
+        "日本": DictionaryEntry(term="日本", reading="にほん", pos="NOUN", meaning="Nhật Bản", score=1),
+        "面白い": DictionaryEntry(term="面白い", reading="おもしろい", pos="ADJECTIVE", meaning="thú vị", score=1),
+        "話す": DictionaryEntry(term="話す", reading="はなす", pos="VERB", meaning="nói, trò chuyện", score=1),
+        "話します": DictionaryEntry(term="話します", reading="はなします", pos="VERB", meaning="nói chuyện", score=1),
+        "について": DictionaryEntry(term="について", reading="について", pos="PARTICLE", meaning="về", score=1),
     }
 
     def __init__(self, db_path: Optional[str] = None, exclude_terms: Optional[Set[str]] = None):
@@ -45,17 +45,17 @@ class KnowledgeService:
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT term, reading, pos, meaning, definition_tags, rules, commonality, sequence, jlpt_level "
+                    "SELECT term, reading, pos, definition_tags, rules, score, meaning, sequence, term_tags "
                     "FROM dictionary WHERE term = ? OR reading = ? LIMIT 1",
                     (word, word),
                 )
                 row = cur.fetchone()
                 if row:
                     entry = DictionaryEntry(
-                        term=row[0], reading=row[1], pos=row[2], meaning=row[3],
-                        definition_tags=row[4] or "", rules=row[5] or "",
-                        commonality=int(row[6] or 1), sequence=int(row[7] or 0),
-                        jlpt_level=row[8] or ""
+                        term=row[0], reading=row[1], pos=row[2],
+                        definition_tags=row[3] or "", rules=row[4] or "",
+                        score=int(row[5] or 1), meaning=row[6] or "",
+                        sequence=int(row[7] or 0), term_tags=row[8] or ""
                     )
                     self.in_memory_cache[word] = entry
                     return entry
@@ -108,9 +108,9 @@ class KnowledgeService:
             try:
                 cur = conn.cursor()
                 cur.execute("""
-                    INSERT OR REPLACE INTO dictionary (term, reading, pos, meaning, definition_tags, rules, commonality, sequence, jlpt_level)
+                    INSERT OR REPLACE INTO dictionary (term, reading, pos, definition_tags, rules, score, meaning, sequence, term_tags)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (entry.term, entry.reading, entry.pos, entry.meaning, entry.definition_tags, entry.rules, entry.commonality, entry.sequence, entry.jlpt_level))
+                """, (entry.term, entry.reading, entry.pos, entry.definition_tags, entry.rules, entry.score, entry.meaning, entry.sequence, entry.term_tags))
                 conn.commit()
             finally:
                 conn.close()

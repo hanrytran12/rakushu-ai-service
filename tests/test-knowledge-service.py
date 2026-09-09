@@ -83,8 +83,8 @@ class TestKnowledgeService(unittest.TestCase):
             conn.execute("""
                 CREATE TABLE dictionary (
                     term TEXT NOT NULL, reading TEXT NOT NULL DEFAULT '', pos TEXT NOT NULL DEFAULT 'NOUN',
-                    definition_tags TEXT DEFAULT '', rules TEXT DEFAULT '', meaning TEXT NOT NULL,
-                    commonality INTEGER DEFAULT 1, sequence INTEGER DEFAULT 0, jlpt_level TEXT DEFAULT '',
+                    definition_tags TEXT DEFAULT '', rules TEXT DEFAULT '', score INTEGER DEFAULT 1,
+                    meaning TEXT NOT NULL, sequence INTEGER DEFAULT 0, term_tags TEXT DEFAULT '',
                     PRIMARY KEY (term, reading)
                 );
             """)
@@ -97,7 +97,7 @@ class TestKnowledgeService(unittest.TestCase):
             # Register OOV
             new_entry = DictionaryEntry(
                 term="パリピ", reading="ぱりぴ", pos="NOUN",
-                meaning="dân quẩy, người thích tiệc tùng (party people)", commonality=1
+                meaning="dân quẩy, người thích tiệc tùng (party people)", score=1
             )
             svc.register_enriched_oov(new_entry)
 

@@ -66,12 +66,12 @@ class DictionaryEntry:
     term: str = ""
     reading: str = ""
     pos: str = ""
-    meaning: str = ""
     definition_tags: str = ""
     rules: str = ""
-    commonality: int = 1
+    score: int = 1
+    meaning: str = ""
     sequence: int = 0
-    jlpt_level: str = ""
+    term_tags: str = ""
 
     def to_dict(self):
         return asdict(self)

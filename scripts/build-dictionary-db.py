@@ -119,8 +119,8 @@ def build_database(db_path: str = "data/dictionary.db", cache_dir: str = "data/c
 
     cur.execute("""CREATE TABLE dictionary (
         term TEXT NOT NULL, reading TEXT NOT NULL DEFAULT '', pos TEXT NOT NULL DEFAULT 'NOUN',
-        definition_tags TEXT DEFAULT '', rules TEXT DEFAULT '', meaning TEXT NOT NULL,
-        commonality INTEGER DEFAULT 1, sequence INTEGER DEFAULT 0, jlpt_level TEXT DEFAULT '',
+        definition_tags TEXT DEFAULT '', rules TEXT DEFAULT '', score INTEGER DEFAULT 1,
+        meaning TEXT NOT NULL, sequence INTEGER DEFAULT 0, term_tags TEXT DEFAULT '',
         PRIMARY KEY (term, reading));""")
     cur.execute("CREATE INDEX idx_dict_term ON dictionary(term);")
     cur.execute("CREATE INDEX idx_dict_reading ON dictionary(reading);")
@@ -142,33 +142,18 @@ def build_database(db_path: str = "data/dictionary.db", cache_dir: str = "data/c
             else:
                 cat = raw_cat or "partOfSpeech"
                 d = desc_en.lower()
-                desc_vi = desc_en
-                if "ichidan verb" in d: desc_vi = "Động từ nhóm 2 (Ichidan)"
-                elif "godan verb" in d: desc_vi = "Động từ nhóm 1 (Godan)"
-                elif "yodan verb" in d: desc_vi = "Động từ 4 đoạn (Yodan - lối dùng cổ)"
-                elif "nidan verb" in d: desc_vi = "Động từ 2 đoạn (Nidan - lối dùng cổ)"
-                elif "suru verb" in d: desc_vi = "Động từ nhóm 3 (Suru)"
-                elif "kuru verb" in d: desc_vi = "Động từ Kuru (Đến)"
-                elif "transitive verb" in d: desc_vi = "Tha động từ (có tân ngữ)"
-                elif "intransitive verb" in d: desc_vi = "Tự động từ (không cần tân ngữ)"
-                elif "irregular verb" in d: desc_vi = "Động từ bất quy tắc"
-                elif "adverbial noun" in d: desc_vi = "Danh từ phó từ"
-                elif "proper noun" in d: desc_vi = "Danh từ riêng"
-                elif "common noun" in d or "futsuumeishi" in d: desc_vi = "Danh từ thông thường"
-                elif "noun (temporal)" in d: desc_vi = "Danh từ chỉ thời gian"
-                elif "acting prenominally" in d: desc_vi = "Từ làm định ngữ bổ nghĩa danh từ"
-                elif "noun, used as a" in d: desc_vi = "Danh từ dùng làm tiền/hậu tố"
-                elif "counter" in d: desc_vi = "Từ chỉ số đếm (lượng từ)"
-                elif "pronoun" in d: desc_vi = "Đại từ"
-                elif "adjective" in d or "keiyoushi" in d: desc_vi = "Tính từ"
-                elif "adverb" in d: desc_vi = "Phó từ"
-                elif "particle" in d: desc_vi = "Trợ từ"
-                elif "conjunction" in d: desc_vi = "Liên từ"
-                elif "interjection" in d: desc_vi = "Thán từ"
-                elif "auxiliary" in d: desc_vi = "Từ bổ trợ / Trợ từ"
-                elif "prefix" in d: desc_vi = "Tiền tố"
-                elif "suffix" in d: desc_vi = "Hậu tố"
-                elif "expression" in d: desc_vi = "Cụm từ biểu đạt"
+                tag_patterns = {
+                    "ichidan": "Động từ nhóm 2 (Ichidan)", "godan": "Động từ nhóm 1 (Godan)",
+                    "suru": "Động từ nhóm 3 (Suru)", "kuru": "Động từ Kuru (Đến)",
+                    "transitive": "Tha động từ (có tân ngữ)", "intransitive": "Tự động từ (không cần tân ngữ)",
+                    "irregular": "Động từ bất quy tắc", "common noun": "Danh từ thông thường",
+                    "proper noun": "Danh từ riêng", "temporal": "Danh từ chỉ thời gian",
+                    "counter": "Từ chỉ số đếm (lượng từ)", "pronoun": "Đại từ",
+                    "adjective": "Tính từ", "adverb": "Phó từ", "particle": "Trợ từ",
+                    "conjunction": "Liên từ", "interjection": "Thán từ", "prefix": "Tiền tố",
+                    "suffix": "Hậu tố", "expression": "Cụm từ biểu đạt"
+                }
+                desc_vi = next((v for k, v in tag_patterns.items() if k in d), desc_en)
             tag_rows.append((name, cat, desc_en, desc_vi))
         cur.executemany("INSERT OR REPLACE INTO definition_tags VALUES (?, ?, ?, ?)", tag_rows)
 
@@ -183,8 +168,9 @@ def build_database(db_path: str = "data/dictionary.db", cache_dir: str = "data/c
                 score = int(item[4]) if len(item) > 4 and isinstance(item[4], int) else 1
                 meaning = clean_meaning(item[5] if len(item) > 5 else [], term)
                 seq = int(item[6]) if len(item) > 6 and isinstance(item[6], int) else 0
+                term_tags = item[7].strip() if len(item) > 7 else ""
                 pos = map_pos(def_tags)
-                batch.append((term, reading, pos, def_tags, rule, meaning, score, seq, ""))
+                batch.append((term, reading, pos, def_tags, rule, score, meaning, seq, term_tags))
                 if len(batch) >= 4000:
                     cur.executemany("INSERT OR REPLACE INTO dictionary VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", batch)
                     batch = []
