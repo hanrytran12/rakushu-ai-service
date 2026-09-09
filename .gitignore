@@ -23,10 +23,13 @@ samples/*.wav
 *.mp3
 *.mkv
 
-# Temporary files and logs
+# Temporary files, caches, and large databases
 *.log
 temp/
 tmp/
+data/cache/
+data/*.db
+data/*.sqlite
 
 # IDE / Editor / OS files
 .vscode/
