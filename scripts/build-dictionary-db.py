@@ -4,23 +4,57 @@ from typing import Dict, List, Tuple
 
 JMDICT_VI_URL = "https://raw.githubusercontent.com/dreamofi/yomichan-Vietnamese-dictionary/master/vietnameseDict/jmdict_vietnamese.zip"
 
-TAG_VI_MAP = {
-    "n": "Danh từ thông dụng", "v1": "Động từ nhóm 2 (Ichidan)", "v5": "Động từ nhóm 1 (Godan)",
-    "v5r": "Động từ nhóm 1 đuôi ru", "v5k": "Động từ nhóm 1 đuôi ku", "v5s": "Động từ nhóm 1 đuôi su",
-    "v5t": "Động từ nhóm 1 đuôi tsu", "v5m": "Động từ nhóm 1 đuôi mu", "v5b": "Động từ nhóm 1 đuôi bu",
-    "v5g": "Động từ nhóm 1 đuôi gu", "v5u": "Động từ nhóm 1 đuôi u", "vs": "Động từ nhóm 3 / Danh từ Suru",
-    "vk": "Động từ Kuru (Đến)", "adj-i": "Tính từ đuôi -i", "adj-na": "Tính từ đuôi -na",
-    "adj-no": "Danh từ làm định ngữ (kèm no)", "adv": "Phó từ", "adv-to": "Phó từ kèm trợ từ to",
-    "prt": "Trợ từ", "int": "Thán từ", "conj": "Liên từ", "num": "Số từ", "sl": "Tiếng lóng / Slang",
-    "id": "Thành ngữ / Quán ngữ", "Buddh": "Thuật ngữ Phật giáo", "MA": "Thuật ngữ Võ thuật",
-    "food": "Ẩm thực / Thức ăn", "comp": "Thuật ngữ Tin học", "ling": "Thuật ngữ Ngôn ngữ học",
-    "anat": "Thuật ngữ Giải phẫu", "geom": "Thuật ngữ Hình học", "ecol": "Thuật ngữ Sinh thái học",
-    "chem": "Thuật ngữ Hóa học", "math": "Thuật ngữ Toán học", "physics": "Thuật ngữ Vật lý",
-    "mil": "Thuật ngữ Quân sự", "law": "Thuật ngữ Pháp luật", "econ": "Thuật ngữ Kinh tế",
-    "P": "Từ vựng phổ biến", "ichi": "Top từ thông dụng (Ichimango)", "news": "Hay dùng trên báo chí",
-    "spec": "Từ vựng đặc biệt", "gai": "Từ mượn tiếng nước ngoài", "abbr": "Từ viết tắt",
-    "arch": "Từ cổ / Nghĩa cổ", "fam": "Cách nói thân mật / gia đình", "pol": "Thể lịch sự",
-    "hon": "Kính ngữ (Sonkeigo)", "hum": "Khiêm nhường ngữ (Kenjougo)", "derog": "Từ khiếm nhã / xúc phạm"
+EXPLICIT_TAG_MAP = {
+    "news": ("frequent", "Xuất hiện nhiều trên báo chí"), "ichi": ("frequent", "Top từ thông dụng (Ichimango)"),
+    "spec": ("frequent", "Từ thông dụng đặc biệt"), "gai": ("frequent", "Từ mượn tiếng nước ngoài"),
+    "P": ("popular", "Từ vựng đại chúng phổ biến"), "ksb": ("dialect", "Phương ngữ Kansai (Kansai-ben)"),
+    "osb": ("dialect", "Phương ngữ Osaka (Osaka-ben)"), "ktb": ("dialect", "Phương ngữ Kanto (Kanto-ben)"),
+    "kyb": ("dialect", "Phương ngữ Kyoto (Kyoto-ben)"), "kyu": ("dialect", "Phương ngữ Kyushu (Kyushu-ben)"),
+    "thb": ("dialect", "Phương ngữ Tohoku (Tohoku-ben)"), "tsug": ("dialect", "Phương ngữ Tsugaru (Tsugaru-ben)"),
+    "tsb": ("dialect", "Phương ngữ Tosa (Tosa-ben)"), "nab": ("dialect", "Phương ngữ Nagano (Nagano-ben)"),
+    "rkb": ("dialect", "Phương ngữ Ryukyu / Okinawa"), "hob": ("dialect", "Phương ngữ Hokkaido (Hokkaido-ben)"),
+    "Buddh": ("field", "Thuật ngữ Phật giáo"), "MA": ("field", "Thuật ngữ Võ thuật"),
+    "comp": ("field", "Thuật ngữ Tin học / Máy tính"), "food": ("field", "Thuật ngữ Ẩm thực / Món ăn"),
+    "med": ("field", "Thuật ngữ Y học / Y tế"), "anat": ("field", "Thuật ngữ Giải phẫu học"),
+    "geom": ("field", "Thuật ngữ Hình học"), "chem": ("field", "Thuật ngữ Hóa học"),
+    "physics": ("field", "Thuật ngữ Vật lý học"), "math": ("field", "Thuật ngữ Toán học"),
+    "law": ("field", "Thuật ngữ Pháp luật"), "econ": ("field", "Thuật ngữ Kinh tế học"),
+    "finc": ("field", "Thuật ngữ Tài chính"), "bus": ("field", "Thuật ngữ Kinh doanh"),
+    "engr": ("field", "Thuật ngữ Kỹ thuật / Công trình"), "biol": ("field", "Thuật ngữ Sinh học"),
+    "bot": ("field", "Thuật ngữ Thực vật học"), "zool": ("field", "Thuật ngữ Động vật học"),
+    "geol": ("field", "Thuật ngữ Địa chất học"), "astron": ("field", "Thuật ngữ Thiên văn học"),
+    "archit": ("field", "Thuật ngữ Kiến trúc"), "ling": ("field", "Thuật ngữ Ngôn ngữ học"),
+    "mil": ("field", "Thuật ngữ Quân sự"), "Shinto": ("field", "Thuật ngữ Thần đạo (Shinto)"),
+    "sumo": ("field", "Thuật ngữ Đấu vật Sumo"), "shogi": ("field", "Thuật ngữ Cờ tướng Shogi"),
+    "mahj": ("field", "Thuật ngữ Mạt chược"), "sports": ("field", "Thuật ngữ Thể thao"),
+    "baseb": ("field", "Thuật ngữ Bóng chày"), "music": ("field", "Thuật ngữ Âm nhạc"),
+    "male": ("misc", "Cách nói / từ ngữ của nam giới"), "fem": ("misc", "Cách nói / từ ngữ của nữ giới"),
+    "sl": ("misc", "Tiếng lóng (Slang)"), "m-sl": ("misc", "Tiếng lóng trong Manga"),
+    "male-sl": ("misc", "Tiếng lóng của nam giới"), "col": ("misc", "Khẩu ngữ / Văn nói hàng ngày"),
+    "fam": ("misc", "Cách nói thân mật, gia đình"), "pol": ("misc", "Thể lịch sự (Teineigo)"),
+    "hon": ("misc", "Kính ngữ tôn kính (Sonkeigo)"), "hum": ("misc", "Khiêm nhường ngữ (Kenjougo)"),
+    "derog": ("misc", "Từ khiếm nhã / xúc phạm / miệt thị"), "vulg": ("misc", "Từ thô tục / tục tĩu"),
+    "X": ("misc", "Từ nhạy cảm / 18+"), "sens": ("misc", "Từ ngữ nhạy cảm"),
+    "joc": ("misc", "Cách nói hài hước / trêu đùa"), "proverb": ("misc", "Tục ngữ / Châm ngôn"),
+    "yoji": ("misc", "Thành ngữ 4 chữ Hán (Yojijukugo)"), "id": ("misc", "Quán ngữ / Thành ngữ"),
+    "poet": ("misc", "Từ ngữ thi ca / Văn chương"), "chn": ("misc", "Ngôn ngữ trẻ em"),
+    "abbr": ("misc", "Từ viết tắt"), "arch": ("misc", "Từ cổ / Lối dùng cổ"),
+    "obs": ("misc", "Từ lỗi thời"), "obsc": ("misc", "Từ tối nghĩa, ít dùng"),
+    "rare": ("misc", "Từ hiếm gặp"), "uk": ("misc", "Thường chỉ viết bằng Kana"),
+    "uK": ("misc", "Thường chỉ viết bằng Kanji"), "ek": ("misc", "Chỉ viết bằng Kana"),
+    "eK": ("misc", "Chỉ viết bằng Kanji"), "ateji": ("misc", "Mượn chữ Hán đọc theo âm (Ateji)"),
+    "gikun": ("misc", "Cách đọc nghĩa chữ Hán (Gikun)"), "ik": ("misc", "Kana dùng bất quy tắc"),
+    "ok": ("misc", "Kana kiểu cổ"), "iK": ("misc", "Kanji dùng bất quy tắc"),
+    "oK": ("misc", "Kanji kiểu cổ"), "io": ("misc", "Okurigana bất quy tắc"),
+    "oik": ("misc", "Cách viết Kana cổ / bất quy tắc"), "on-mim": ("misc", "Từ tượng thanh / tượng hình"),
+    "adj-kari": ("partOfSpeech", "Tính từ đuôi kari (cổ)"), "adj-ku": ("partOfSpeech", "Tính từ đuôi ku (cổ)"),
+    "adj-shiku": ("partOfSpeech", "Tính từ đuôi shiku (cổ)"), "adj-nari": ("partOfSpeech", "Tính từ đuôi nari (cổ)"),
+    "adj-pn": ("partOfSpeech", "Từ hạn định đứng trước danh từ (Rentaishi)"),
+    "vs": ("partOfSpeech", "Động từ nhóm 3 (Suru)"), "vs-c": ("partOfSpeech", "Động từ Su (tiền thân của Suru)"),
+    "vr": ("partOfSpeech", "Động từ bất quy tắc đuôi ru"), "vn": ("partOfSpeech", "Động từ bất quy tắc đuôi nu"),
+    "v-unspec": ("partOfSpeech", "Động từ chưa phân nhóm"), "exp": ("partOfSpeech", "Cụm từ biểu đạt"),
+    "num": ("partOfSpeech", "Số từ"), "cop-da": ("partOfSpeech", "Hệ từ khẳng định (da)"),
+    "unc": ("partOfSpeech", "Từ loại chưa phân loại cụ thể")
 }
 
 INFLECTION_RULES_DATA = [
@@ -102,8 +136,39 @@ def build_database(db_path: str = "data/dictionary.db", cache_dir: str = "data/c
         tags_raw = json.load(z.open("tag_bank_1.json"))
         tag_rows = []
         for t in tags_raw:
-            name, cat, desc_en = t[0], t[1], t[3]
-            desc_vi = TAG_VI_MAP.get(name, desc_en)
+            name, raw_cat, desc_en = t[0], t[1], t[3]
+            if name in EXPLICIT_TAG_MAP:
+                cat, desc_vi = EXPLICIT_TAG_MAP[name]
+            else:
+                cat = raw_cat or "partOfSpeech"
+                d = desc_en.lower()
+                desc_vi = desc_en
+                if "ichidan verb" in d: desc_vi = "Động từ nhóm 2 (Ichidan)"
+                elif "godan verb" in d: desc_vi = "Động từ nhóm 1 (Godan)"
+                elif "yodan verb" in d: desc_vi = "Động từ 4 đoạn (Yodan - lối dùng cổ)"
+                elif "nidan verb" in d: desc_vi = "Động từ 2 đoạn (Nidan - lối dùng cổ)"
+                elif "suru verb" in d: desc_vi = "Động từ nhóm 3 (Suru)"
+                elif "kuru verb" in d: desc_vi = "Động từ Kuru (Đến)"
+                elif "transitive verb" in d: desc_vi = "Tha động từ (có tân ngữ)"
+                elif "intransitive verb" in d: desc_vi = "Tự động từ (không cần tân ngữ)"
+                elif "irregular verb" in d: desc_vi = "Động từ bất quy tắc"
+                elif "adverbial noun" in d: desc_vi = "Danh từ phó từ"
+                elif "proper noun" in d: desc_vi = "Danh từ riêng"
+                elif "common noun" in d or "futsuumeishi" in d: desc_vi = "Danh từ thông thường"
+                elif "noun (temporal)" in d: desc_vi = "Danh từ chỉ thời gian"
+                elif "acting prenominally" in d: desc_vi = "Từ làm định ngữ bổ nghĩa danh từ"
+                elif "noun, used as a" in d: desc_vi = "Danh từ dùng làm tiền/hậu tố"
+                elif "counter" in d: desc_vi = "Từ chỉ số đếm (lượng từ)"
+                elif "pronoun" in d: desc_vi = "Đại từ"
+                elif "adjective" in d or "keiyoushi" in d: desc_vi = "Tính từ"
+                elif "adverb" in d: desc_vi = "Phó từ"
+                elif "particle" in d: desc_vi = "Trợ từ"
+                elif "conjunction" in d: desc_vi = "Liên từ"
+                elif "interjection" in d: desc_vi = "Thán từ"
+                elif "auxiliary" in d: desc_vi = "Từ bổ trợ / Trợ từ"
+                elif "prefix" in d: desc_vi = "Tiền tố"
+                elif "suffix" in d: desc_vi = "Hậu tố"
+                elif "expression" in d: desc_vi = "Cụm từ biểu đạt"
             tag_rows.append((name, cat, desc_en, desc_vi))
         cur.executemany("INSERT OR REPLACE INTO definition_tags VALUES (?, ?, ?, ?)", tag_rows)
 
