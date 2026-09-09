@@ -6,6 +6,8 @@ _schema = importlib.import_module(".schema-models", package=__name__)
 SubtitleSegment = _schema.SubtitleSegment
 TokenModel = _schema.TokenModel
 DictionaryEntry = _schema.DictionaryEntry
+DefinitionTag = _schema.DefinitionTag
+InflectionRule = _schema.InflectionRule
 OovCandidate = _schema.OovCandidate
 BunsetsuPhrase = _schema.BunsetsuPhrase
 SentenceSubtitle = _schema.SentenceSubtitle
@@ -23,6 +25,8 @@ __all__ = [
     "SubtitleSegment",
     "TokenModel",
     "DictionaryEntry",
+    "DefinitionTag",
+    "InflectionRule",
     "OovCandidate",
     "BunsetsuPhrase",
     "SentenceSubtitle",

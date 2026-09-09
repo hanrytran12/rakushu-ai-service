@@ -39,14 +39,39 @@ class TokenModel:
 
 
 @dataclass
+class DefinitionTag:
+    name: str = ""
+    category: str = ""
+    description_en: str = ""
+    description_vi: str = ""
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class InflectionRule:
+    rule_code: str = ""
+    name_vi: str = ""
+    description_vi: str = ""
+    examples: str = ""
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
 class DictionaryEntry:
     entry_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     term: str = ""
     reading: str = ""
     pos: str = ""
     meaning: str = ""
-    jlpt_level: str = "N5"
+    definition_tags: str = ""
+    rules: str = ""
     commonality: int = 1
+    sequence: int = 0
+    jlpt_level: str = ""
 
     def to_dict(self):
         return asdict(self)
