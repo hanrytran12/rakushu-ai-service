@@ -88,23 +88,9 @@ def map_pos(tag_str: str) -> str:
     if "num" in t: return "NUMERAL"
     return "NOUN"
 
-def clean_meaning(raw_gloss: list, term: str) -> str:
-    meanings = []
-    for g in raw_gloss:
-        if isinstance(g, str): meanings.append(g.strip())
-        elif isinstance(g, dict) and "content" in g: meanings.append(str(g["content"]).strip())
-    raw = "; ".join(meanings) if meanings else term
-    lines = raw.split("\n")
-    vi_cands = []
-    for line in lines:
-        m = re.search(r"-\s*\{[^}]+\},\s*([^,\n;]+)", line)
-        if m: vi_cands.append(m.group(1).strip()); continue
-        words = [w.strip() for w in line.split(";") if any(c in "àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ" for c in w.lower())]
-        if words:
-            for w in words:
-                sub = re.sub(r"^[^\s]+\s+[A-ZÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴĐ\s]+$", "", w).strip()
-                vi_cands.append(sub if sub else w)
-    return ", ".join(dict.fromkeys(vi_cands[:2])) if vi_cands else raw.split(";")[0].strip()[:60]
+def format_raw_meaning(raw_gloss: list, term: str) -> str:
+    if not raw_gloss: return term
+    return "\n".join(str(g).strip() for g in raw_gloss if str(g).strip())
 
 def build_database(db_path: str = "data/dictionary.db", cache_dir: str = "data/cache"):
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -166,7 +152,7 @@ def build_database(db_path: str = "data/dictionary.db", cache_dir: str = "data/c
                 def_tags = item[2].strip() if len(item) > 2 else ""
                 rule = item[3].strip() if len(item) > 3 else ""
                 score = int(item[4]) if len(item) > 4 and isinstance(item[4], int) else 1
-                meaning = clean_meaning(item[5] if len(item) > 5 else [], term)
+                meaning = format_raw_meaning(item[5] if len(item) > 5 else [], term)
                 seq = int(item[6]) if len(item) > 6 and isinstance(item[6], int) else 0
                 term_tags = item[7].strip() if len(item) > 7 else ""
                 pos = map_pos(def_tags)
