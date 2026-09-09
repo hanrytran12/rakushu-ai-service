@@ -104,10 +104,16 @@ class BunsetsuService:
                     meanings.append(m)
         return " + ".join(meanings) if meanings else span.text
 
-    def _group_bunsetsu_rules(self, segment: SubtitleSegment, tokens: List[TokenModel]) -> List[BunsetsuPhrase]:
+    def _group_bunsetsu_rules(
+        self,
+        segment: SubtitleSegment,
+        tokens: List[TokenModel],
+        token_meanings: Optional[Dict[str, str]] = None
+    ) -> List[BunsetsuPhrase]:
         phrases: List[BunsetsuPhrase] = []
         current_cluster: List[TokenModel] = []
         order = 1
+        tm = token_meanings or {}
 
         def flush(cluster: List[TokenModel], ord_num: int) -> Optional[BunsetsuPhrase]:
             if not cluster:

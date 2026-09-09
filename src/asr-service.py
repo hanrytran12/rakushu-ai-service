@@ -71,7 +71,7 @@ class AsrService:
                     text = "".join(s.text for s in segments).strip()
 
                 # Clean up speech variations
-                text = text.replace("話しします", "話します")
+                text = text.replace("話しします", "話します").replace("ポッドケスト", "ポッドキャスト")
                 duration = getattr(info, "duration", self._get_audio_duration(wav_path))
                 return SubtitleSegment(
                     start_time=0.0,

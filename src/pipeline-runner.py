@@ -1,14 +1,6 @@
-"""Rakushu AI Service: End-to-End ASR -> NLP -> Bunsetsu & OOV Pipeline Runner."""
-import sys
-import os
-import time
-import logging
+import sys, os, time, logging
 from typing import List
-
-# Adjust module search path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Ensure UTF-8 output on Windows console
 if sys.stdout.encoding != "utf-8":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -17,17 +9,9 @@ if sys.stdout.encoding != "utf-8":
         pass
 
 from src import (
-    SubtitleSegment,
-    SentenceSubtitle,
-    PipelineResult,
-    AsrService,
-    NlpService,
-    KnowledgeService,
-    LlmEnrichmentService,
-    BunsetsuService,
-    YouTubeService,
+    SubtitleSegment, SentenceSubtitle, PipelineResult, AsrService,
+    NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService
 )
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RakushuPipeline")
 
@@ -170,6 +154,20 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         print("  Bunsetsu interactive chunks:")
         for bp in s.bunsetsu_phrases:
             print(f"    * [{bp.text}] ({bp.start_time:.1f}s-{bp.end_time:.1f}s) -> {bp.translation}")
+
+    # Display Discovered OOV candidates summary
+    print("\n" + "=" * 80)
+    if result.oov_candidates:
+        print(f" [DISCOVERED OOV TERMS] Phát hiện {len(result.oov_candidates)} từ mới ngoài từ điển:")
+        print("=" * 80)
+        seen_oov = set()
+        for o in result.oov_candidates:
+            if o.term not in seen_oov:
+                print(f"  * {o.term} ({o.suggested_pos}): {o.suggested_meaning} [Score: {o.confidence_score*100:.0f}%]")
+                seen_oov.add(o.term)
+    else:
+        print(" [DISCOVERED OOV TERMS] 100% từ vựng đều có sẵn trong kho tri thức.")
+        print("=" * 80)
 
     if result.segment.source_url:
         print(f"\nSource URL: {result.segment.source_url}")
