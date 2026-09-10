@@ -17,7 +17,7 @@ class TestKnowledgeService(unittest.TestCase):
         cls.real_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "dictionary.db"))
 
     def test_01_real_database_lookup(self):
-        """Tests that real words are successfully retrieved from SQLite with Vietnamese meanings."""
+        """Tests that real words are successfully retrieved from SQLite with definition tags and rules."""
         if not os.path.exists(self.real_db_path):
             self.skipTest("data/dictionary.db not found, skipping real db lookup")
 
@@ -29,13 +29,28 @@ class TestKnowledgeService(unittest.TestCase):
         self.assertEqual(entry.term, "今日")
         self.assertEqual(entry.reading, "きょう")
         self.assertIn("hôm nay", entry.meaning.lower())
-        self.assertEqual(entry.jlpt_level, "N5")
 
-        # Test verb lookup
-        entry_verb = svc.lookup("話す")
+        # Test verb lookup with definition_tags and rules
+        entry_verb = svc.lookup("食べる")
         self.assertIsNotNone(entry_verb)
         self.assertEqual(entry_verb.pos, "VERB")
-        self.assertEqual(entry_verb.jlpt_level, "N3")
+        self.assertIn("v1", entry_verb.definition_tags)
+        self.assertEqual(entry_verb.rules, "v1")
+        self.assertGreater(entry_verb.sequence, 0)
+
+        # Test get_tag_info
+        tag_info = svc.get_tag_info("v1")
+        self.assertIsNotNone(tag_info)
+        self.assertEqual(tag_info.name, "v1")
+        self.assertIn("Ichidan", tag_info.description_en)
+        self.assertIn("Động từ nhóm 2", tag_info.description_vi)
+
+        # Test get_rule_info
+        rule_info = svc.get_rule_info("v1")
+        self.assertIsNotNone(rule_info)
+        self.assertEqual(rule_info.rule_code, "v1")
+        self.assertIn("Ichidan", rule_info.name_vi)
+        self.assertIn("食べる", rule_info.examples)
 
     def test_02_match_tokens_and_oov_detection(self):
         """Tests categorizing tokens into known vocabulary vs OOV candidates."""
@@ -67,8 +82,10 @@ class TestKnowledgeService(unittest.TestCase):
             conn = sqlite3.connect(tmp_db)
             conn.execute("""
                 CREATE TABLE dictionary (
-                    term TEXT PRIMARY KEY, reading TEXT, pos TEXT, meaning TEXT,
-                    jlpt_level TEXT, commonality INTEGER
+                    term TEXT NOT NULL, reading TEXT NOT NULL DEFAULT '', pos TEXT NOT NULL DEFAULT 'NOUN',
+                    definition_tags TEXT DEFAULT '', rules TEXT DEFAULT '', score INTEGER DEFAULT 1,
+                    meaning TEXT NOT NULL, sequence INTEGER DEFAULT 0, term_tags TEXT DEFAULT '',
+                    PRIMARY KEY (term, reading)
                 );
             """)
             conn.commit()
@@ -80,7 +97,7 @@ class TestKnowledgeService(unittest.TestCase):
             # Register OOV
             new_entry = DictionaryEntry(
                 term="パリピ", reading="ぱりぴ", pos="NOUN",
-                meaning="dân quẩy, người thích tiệc tùng (party people)", jlpt_level="Slang", commonality=1
+                meaning="dân quẩy, người thích tiệc tùng (party people)", score=1
             )
             svc.register_enriched_oov(new_entry)
 
@@ -109,7 +126,7 @@ class TestKnowledgeService(unittest.TestCase):
         entry = svc.lookup("今日")
         self.assertIsNotNone(entry)
         self.assertEqual(entry.reading, "きょう")
-        self.assertEqual(entry.jlpt_level, "N5")
+        self.assertIn("hôm nay", entry.meaning)
 
 
 if __name__ == "__main__":
