@@ -10,7 +10,8 @@ if sys.stdout.encoding != "utf-8":
 
 from src import (
     SubtitleSegment, SentenceSubtitle, PipelineResult, AsrService,
-    NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService
+    NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
+    InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
 )
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RakushuPipeline")
@@ -22,11 +23,14 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     print(" [RAKUSHU AI CORE] ASR -> GINZA NLP -> SENTENCE TRANSLATION PIPELINE")
     print("=" * 80)
 
-    # 0. Detect YouTube URL and Download MP4 directly
+    # 0. Source-based handling: Detect YouTube URL vs Local Upload
     youtube_svc = YouTubeService()
     video_meta = {}
     media_file_path = media_path
-    if youtube_svc.is_youtube_url(media_path):
+    is_yt = youtube_svc.is_youtube_url(media_path)
+    source_type = MediaSourceType.YOUTUBE_URL if is_yt else MediaSourceType.LOCAL_UPLOAD
+
+    if is_yt:
         logger.info(f">>> DETECTED YOUTUBE URL: {media_path}")
         logger.info(">>> Downloading YouTube video (.mp4 format)...")
         yt_t0 = time.time()
@@ -35,11 +39,16 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         logger.info(f"   [Saved MP4 Path]: {media_file_path}")
         logger.info(f"   [Video Title]: \"{video_meta.get('title', '')}\"")
 
-    # 1. ASR Transcription via Whisper
+    # 1. ASR Transcription via Whisper with native validation
     t0 = time.time()
     logger.info(">>> STEP 1: Processing video via Whisper ASR...")
     asr_svc = AsrService()
-    full_segment = asr_svc.transcribe(media_file_path)
+    title = video_meta.get("title", "")
+    try:
+        full_segment = asr_svc.transcribe(media_file_path, title=title, source_type=source_type)
+    except (InvalidLanguageError, ProhibitedContentError, InvalidMediaError) as err:
+        logger.error(f"\n{'='*80}\n [REJECTED] MEDIA INPUT VALIDATION FAILED:\n - Reason: {err}\n - Action: Pipeline aborted early.\n{'='*80}")
+        return PipelineResult(segment=SubtitleSegment(text=f"[REJECTED] {err}"), full_translation="")
     if video_meta:
         full_segment.video_id = video_meta.get("video_id", full_segment.video_id)
         full_segment.video_title = video_meta.get("title", "")
@@ -170,8 +179,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         print("=" * 80)
 
     if result.segment.source_url:
-        print(f"\nSource URL: {result.segment.source_url}")
-        print(f"Video Title: {result.segment.video_title}")
+        print(f"\nSource URL: {result.segment.source_url}\nVideo Title: {result.segment.video_title}")
     if result.segment.video_path:
         print(f"Video Path: {result.segment.video_path}")
 
@@ -182,11 +190,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
 if __name__ == "__main__":
     media_file = sys.argv[1] if len(sys.argv) > 1 else "samples/japanese_podcast_10s.mp4"
-    yt_svc = YouTubeService()
-    if not yt_svc.is_youtube_url(media_file) and not os.path.exists(media_file):
+    if not YouTubeService().is_youtube_url(media_file) and not os.path.exists(media_file):
         import importlib
-        create_media = importlib.import_module("samples.create-sample-media")
-        create_media.create_sample_media(media_file)
-
+        importlib.import_module("samples.create-sample-media").create_sample_media(media_file)
     run_pipeline(media_file)
-

@@ -150,3 +150,34 @@ class PipelineResult:
             "bunsetsu_phrases": [p.to_dict() for p in self.bunsetsu_phrases],
             "sentences": [s.to_dict() for s in self.sentences],
         }
+
+
+class MediaSourceType:
+    YOUTUBE_URL = "YOUTUBE_URL"
+    LOCAL_UPLOAD = "LOCAL_UPLOAD"
+
+
+class VideoType:
+    PODCAST_TALKSHOW = "PODCAST_TALKSHOW"
+    NEWS_FORMAL = "NEWS_FORMAL"
+    ANIME_DRAMA = "ANIME_DRAMA"
+    CASUAL_VLOG = "CASUAL_VLOG"
+    MUSIC_SONG = "MUSIC_SONG"
+    GENERAL_CONVERSATION = "GENERAL_CONVERSATION"
+
+
+@dataclass
+class MediaInspectionResult:
+    is_valid: bool = True
+    source_type: str = MediaSourceType.LOCAL_UPLOAD
+    detected_language: str = "ja"
+    language_probability: float = 1.0
+    video_type: str = VideoType.GENERAL_CONVERSATION
+    whisper_config: dict = field(default_factory=dict)
+    rejection_reason: str = ""
+    error_code: str = ""
+    sample_slices_count: int = 0
+
+    def to_dict(self):
+        return asdict(self)
+

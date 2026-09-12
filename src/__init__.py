@@ -12,6 +12,9 @@ OovCandidate = _schema.OovCandidate
 BunsetsuPhrase = _schema.BunsetsuPhrase
 SentenceSubtitle = _schema.SentenceSubtitle
 PipelineResult = _schema.PipelineResult
+MediaInspectionResult = _schema.MediaInspectionResult
+VideoType = _schema.VideoType
+MediaSourceType = _schema.MediaSourceType
 
 # Services
 AsrService = importlib.import_module(".asr-service", package=__name__).AsrService
@@ -20,6 +23,11 @@ KnowledgeService = importlib.import_module(".knowledge-service", package=__name_
 LlmEnrichmentService = importlib.import_module(".llm-service", package=__name__).LlmEnrichmentService
 BunsetsuService = importlib.import_module(".bunsetsu-service", package=__name__).BunsetsuService
 YouTubeService = importlib.import_module(".youtube-service", package=__name__).YouTubeService
+_inspector = importlib.import_module(".media-inspector", package=__name__)
+MediaInspector = _inspector.MediaInspector
+InvalidMediaError = _inspector.InvalidMediaError
+InvalidLanguageError = _inspector.InvalidLanguageError
+ProhibitedContentError = _inspector.ProhibitedContentError
 
 __all__ = [
     "SubtitleSegment",
@@ -31,10 +39,16 @@ __all__ = [
     "BunsetsuPhrase",
     "SentenceSubtitle",
     "PipelineResult",
+    "MediaInspectionResult",
+    "VideoType",
     "AsrService",
     "NlpService",
     "KnowledgeService",
     "LlmEnrichmentService",
     "BunsetsuService",
     "YouTubeService",
+    "MediaInspector",
+    "InvalidMediaError",
+    "InvalidLanguageError",
+    "ProhibitedContentError",
 ]
