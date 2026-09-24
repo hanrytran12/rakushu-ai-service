@@ -1,5 +1,10 @@
-"""FastAPI Server exposing AI Service endpoints for Rakushu API Integration."""
-import os, sys, importlib, logging
+import os
+import sys
+import importlib
+import logging
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
