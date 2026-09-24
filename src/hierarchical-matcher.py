@@ -1,9 +1,8 @@
 """Hierarchical Knowledge Matcher: Grammar -> Phrase -> CompoundWord -> Word."""
-from typing import List, Tuple, Optional, Set, Dict, Any
-import re
+from typing import List, Tuple, Set
 from src import (
     TokenModel, MatchedKnowledgeUnit, GrammarEntry, PhraseEntry,
-    CompoundWordEntry, DictionaryEntry
+    CompoundWordEntry
 )
 
 

@@ -4,7 +4,7 @@ import sqlite3
 import json
 from typing import List, Tuple, Dict, Optional, Set
 from src import (
-    TokenModel, DictionaryEntry, OovCandidate, DefinitionTag, InflectionRule,
+    TokenModel, DictionaryEntry, DefinitionTag, InflectionRule,
     GrammarEntry, PhraseEntry, CompoundWordEntry, MatchedKnowledgeUnit
 )
 
@@ -35,6 +35,17 @@ class KnowledgeService:
 
     def _get_connection(self) -> Optional[sqlite3.Connection]:
         return sqlite3.connect(self.db_path) if os.path.exists(self.db_path) else None
+
+    def _query_one(self, sql: str, params: Tuple = ()) -> Optional[Tuple]:
+        conn = self._get_connection()
+        if not conn:
+            return None
+        try:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            return cur.fetchone()
+        finally:
+            conn.close()
 
     def lookup(self, word: str) -> Optional[DictionaryEntry]:
         """Looks up a word in cache, SQLite DB, or fallback."""
@@ -82,95 +93,86 @@ class KnowledgeService:
 
     def get_tag_info(self, tag_name: str) -> Optional[DefinitionTag]:
         """Queries linguistic explanation for a definition tag (e.g. 'v1', 'adj-i', 'Buddh')."""
-        conn = self._get_connection()
-        if not conn or not tag_name: return None
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT name, category, description_en, description_vi FROM definition_tags WHERE name = ?", (tag_name,))
-            r = cur.fetchone()
-            return DefinitionTag(name=r[0], category=r[1], description_en=r[2], description_vi=r[3]) if r else None
-        finally:
-            conn.close()
+        if not tag_name:
+            return None
+        r = self._query_one(
+            "SELECT name, category, description_en, description_vi FROM definition_tags WHERE name = ?",
+            (tag_name,)
+        )
+        return DefinitionTag(name=r[0], category=r[1], description_en=r[2], description_vi=r[3]) if r else None
 
     def get_rule_info(self, rule_code: str) -> Optional[InflectionRule]:
         """Queries explanation for verb/adjective inflection rules."""
-        conn = self._get_connection()
-        if not conn or not rule_code: return None
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT rule_code, name_vi, description_vi, examples FROM inflection_rules WHERE rule_code = ?", (rule_code,))
-            r = cur.fetchone()
-            return InflectionRule(rule_code=r[0], name_vi=r[1], description_vi=r[2], examples=r[3]) if r else None
-        finally:
-            conn.close()
+        if not rule_code:
+            return None
+        r = self._query_one(
+            "SELECT rule_code, name_vi, description_vi, examples FROM inflection_rules WHERE rule_code = ?",
+            (rule_code,)
+        )
+        return InflectionRule(rule_code=r[0], name_vi=r[1], description_vi=r[2], examples=r[3]) if r else None
 
     def lookup_grammar(self, pattern: str) -> Optional[GrammarEntry]:
         """Looks up a grammar pattern (e.g. 'わけにはいかない', '～に対して')."""
-        if not pattern: return None
-        conn = self._get_connection()
-        if not conn: return None
-        try:
-            cur = conn.cursor()
-            clean = pattern.lstrip("～~- ")
-            cur.execute(
-                "SELECT id, pattern, reading, jlpt_level, formation, meaning, nuance, examples, source "
-                "FROM grammar WHERE pattern = ? OR pattern = ? OR reading = ? LIMIT 1",
-                (pattern, clean, pattern)
-            )
-            r = cur.fetchone()
-            return GrammarEntry(id=r[0], pattern=r[1], reading=r[2], jlpt_level=r[3],
-                                formation=r[4], meaning=r[5], nuance=r[6], examples=r[7], source=r[8]) if r else None
-        finally:
-            conn.close()
+        if not pattern:
+            return None
+        clean = pattern.lstrip("～~- ")
+        r = self._query_one(
+            "SELECT id, pattern, reading, jlpt_level, formation, meaning, nuance, examples, source "
+            "FROM grammar WHERE pattern = ? OR pattern = ? OR reading = ? LIMIT 1",
+            (pattern, clean, pattern)
+        )
+        if not r:
+            return None
+        return GrammarEntry(
+            id=r[0], pattern=r[1], reading=r[2], jlpt_level=r[3],
+            formation=r[4], meaning=r[5], nuance=r[6], examples=r[7], source=r[8]
+        )
 
     def lookup_phrase(self, term: str) -> Optional[PhraseEntry]:
         """Looks up an idiomatic phrase, yojijukugo, or expression."""
-        if not term: return None
-        conn = self._get_connection()
-        if not conn: return None
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT id, term, reading, phrase_type, meaning, tags, source "
-                "FROM phrases WHERE term = ? OR reading = ? LIMIT 1",
-                (term, term)
-            )
-            r = cur.fetchone()
-            return PhraseEntry(id=r[0], term=r[1], reading=r[2], phrase_type=r[3],
-                               meaning=r[4], tags=r[5], source=r[6]) if r else None
-        finally:
-            conn.close()
+        if not term:
+            return None
+        r = self._query_one(
+            "SELECT id, term, reading, phrase_type, meaning, tags, source "
+            "FROM phrases WHERE term = ? OR reading = ? LIMIT 1",
+            (term, term)
+        )
+        if not r:
+            return None
+        return PhraseEntry(
+            id=r[0], term=r[1], reading=r[2], phrase_type=r[3],
+            meaning=r[4], tags=r[5], source=r[6]
+        )
 
     def lookup_compound_word(self, term: str) -> Optional[CompoundWordEntry]:
         """Looks up a compound word (verb or noun) with decomposed components."""
-        if not term: return None
-        conn = self._get_connection()
-        if not conn: return None
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT id, term, reading, compound_type, components, components_reading, transitivity, meaning, structure "
-                "FROM compound_words WHERE term = ? OR reading = ? LIMIT 1",
-                (term, term)
-            )
-            r = cur.fetchone()
-            if not r: return None
-            comps = json.loads(r[4]) if r[4] else []
-            comp_reads = json.loads(r[5]) if r[5] else []
-            return CompoundWordEntry(id=r[0], term=r[1], reading=r[2], compound_type=r[3],
-                                     components=comps, components_reading=comp_reads,
-                                     transitivity=r[6], meaning=r[7], structure=r[8])
-        finally:
-            conn.close()
+        if not term:
+            return None
+        r = self._query_one(
+            "SELECT id, term, reading, compound_type, components, components_reading, transitivity, meaning, structure "
+            "FROM compound_words WHERE term = ? OR reading = ? LIMIT 1",
+            (term, term)
+        )
+        if not r:
+            return None
+        comps = json.loads(r[4]) if r[4] else []
+        comp_reads = json.loads(r[5]) if r[5] else []
+        return CompoundWordEntry(
+            id=r[0], term=r[1], reading=r[2], compound_type=r[3],
+            components=comps, components_reading=comp_reads,
+            transitivity=r[6], meaning=r[7], structure=r[8]
+        )
 
     def match_tokens(self, tokens: List[TokenModel]) -> Tuple[List[DictionaryEntry], List[TokenModel]]:
         matched, oov_tokens, seen_matched = [], [], set()
         for token in tokens:
-            if token.pos in ["PUNCTUATION", "PARTICLE", "AUX_VERB"]: continue
+            if token.pos in ["PUNCTUATION", "PARTICLE", "AUX_VERB"]:
+                continue
             entry = self.lookup(token.surface) or self.lookup(token.lemma)
             if entry:
                 if entry.term not in seen_matched:
-                    matched.append(entry); seen_matched.add(entry.term)
+                    matched.append(entry)
+                    seen_matched.add(entry.term)
             else:
                 oov_tokens.append(token)
         return matched, oov_tokens
@@ -183,7 +185,8 @@ class KnowledgeService:
 
     def register_enriched_oov(self, entry: DictionaryEntry):
         self.in_memory_cache[entry.term] = entry
-        if entry.term in self.exclude_terms: self.exclude_terms.remove(entry.term)
+        if entry.term in self.exclude_terms:
+            self.exclude_terms.remove(entry.term)
         conn = self._get_connection()
         if conn:
             try:

@@ -1,7 +1,7 @@
 """GiNZA Reference Service: Linguistic explanations for UniDic XPOS, Deprel, and Bunsetsu."""
 import os
 import sqlite3
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 
 
 class GinzaReferenceService:
@@ -20,10 +20,14 @@ class GinzaReferenceService:
 
     def explain_xpos(self, code: str) -> Optional[Dict[str, str]]:
         """Queries linguistic explanation for UniDic/Sudachi XPOS tag (e.g. '助詞-格助詞')."""
-        if not code: return None
-        if code in self._cache_xpos: return self._cache_xpos[code]
+        if not code:
+            return None
+        if code in self._cache_xpos:
+            return self._cache_xpos[code]
+
         conn = self._get_connection()
-        if not conn: return None
+        if not conn:
+            return None
         try:
             cur = conn.cursor()
             cur.execute("SELECT code, name, vietnamese, description FROM xpos WHERE code = ? LIMIT 1", (code,))
@@ -38,10 +42,14 @@ class GinzaReferenceService:
 
     def explain_deprel(self, code: str) -> Optional[Dict[str, str]]:
         """Queries explanation for Universal Dependency relation (e.g. 'compound', 'fixed')."""
-        if not code: return None
-        if code in self._cache_deprel: return self._cache_deprel[code]
+        if not code:
+            return None
+        if code in self._cache_deprel:
+            return self._cache_deprel[code]
+
         conn = self._get_connection()
-        if not conn: return None
+        if not conn:
+            return None
         try:
             cur = conn.cursor()
             cur.execute("SELECT code, name, vietnamese, description FROM deprel WHERE code = ? LIMIT 1", (code,))
@@ -56,13 +64,20 @@ class GinzaReferenceService:
 
     def explain_bunsetsu_pos(self, code: str) -> Optional[Dict[str, str]]:
         """Queries explanation for Bunsetsu position type."""
-        if not code: return None
-        if code in self._cache_bunsetsu: return self._cache_bunsetsu[code]
+        if not code:
+            return None
+        if code in self._cache_bunsetsu:
+            return self._cache_bunsetsu[code]
+
         conn = self._get_connection()
-        if not conn: return None
+        if not conn:
+            return None
         try:
             cur = conn.cursor()
-            cur.execute("SELECT code, name, vietnamese, description FROM bunsetsu_position_type WHERE code = ? LIMIT 1", (code,))
+            cur.execute(
+                "SELECT code, name, vietnamese, description FROM bunsetsu_position_type WHERE code = ? LIMIT 1",
+                (code,)
+            )
             r = cur.fetchone()
             if r:
                 res = {"code": r[0], "name": r[1], "vietnamese": r[2], "description": r[3]}

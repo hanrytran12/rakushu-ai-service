@@ -1,5 +1,8 @@
-import sys, os, time, logging
-from typing import List
+import os
+import sys
+import time
+import logging
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 if sys.stdout.encoding != "utf-8":
     try:
@@ -13,15 +16,51 @@ from src import (
     NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
     InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
 )
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RakushuPipeline")
+
+
+def _print_pipeline_summary(result: PipelineResult):
+    """Prints a structured summary of translation, tokens, bunsetsu, and OOVs."""
+    print("\n" + "=" * 80)
+    print(" [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:")
+    print("=" * 80)
+    print(f'Global Transcript: "{result.segment.text}"')
+    print(f'Global Translation: "{result.full_translation}"')
+    for idx, s in enumerate(result.sentences, start=1):
+        print(f"\n[Sentence #{idx}] ({s.segment.start_time:.1f}s -> {s.segment.end_time:.1f}s)")
+        print(f"  JP: {s.segment.text}\n  VI: {s.translation}")
+        print("  Token-level contextual meanings:")
+        for t in s.tokens:
+            if t.context_meaning:
+                print(f"    - {t.surface} ({t.pos}): {t.context_meaning}")
+        print("  Bunsetsu interactive chunks:")
+        for bp in s.bunsetsu_phrases:
+            print(f"    * [{bp.text}] ({bp.start_time:.1f}s-{bp.end_time:.1f}s) -> {bp.translation}")
+
+    print("\n" + "=" * 80)
+    if result.oov_candidates:
+        print(f" [DISCOVERED OOV TERMS] Phát hiện {len(result.oov_candidates)} từ mới ngoài từ điển:")
+        print("=" * 80)
+        seen_oov = set()
+        for o in result.oov_candidates:
+            if o.term not in seen_oov:
+                print(f"  * {o.term} ({o.suggested_pos}): {o.suggested_meaning} [Score: {o.confidence_score*100:.0f}%]")
+                seen_oov.add(o.term)
+    else:
+        print(" [DISCOVERED OOV TERMS] 100% từ vựng đều có sẵn trong kho tri thức.\n" + "=" * 80)
+
+    if result.segment.source_url:
+        print(f"\nSource URL: {result.segment.source_url}\nVideo Title: {result.segment.video_title}")
+    if result.segment.video_path:
+        print(f"Video Path: {result.segment.video_path}")
 
 
 def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> PipelineResult:
     total_start_time = time.time()
     print("\n" + "=" * 80)
-    print(" [RAKUSHU AI CORE] ASR -> GINZA NLP -> SENTENCE TRANSLATION PIPELINE")
-    print("=" * 80)
+    print(" [RAKUSHU AI CORE] ASR -> GINZA NLP -> SENTENCE TRANSLATION PIPELINE\n" + "=" * 80)
 
     # 0. Source-based handling: Detect YouTube URL vs Local Upload
     youtube_svc = YouTubeService()
@@ -148,41 +187,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         bunsetsu_phrases=all_bunsetsu, sentences=sentence_subtitles,
     )
 
-    # 6. Display Summary Report
-    print("\n" + "=" * 80)
-    print(" [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:")
-    print("=" * 80)
-    print(f"Global Transcript: \"{result.segment.text}\"")
-    print(f"Global Translation: \"{result.full_translation}\"")
-    for idx, s in enumerate(result.sentences, start=1):
-        print(f"\n[Sentence #{idx}] ({s.segment.start_time:.1f}s -> {s.segment.end_time:.1f}s)")
-        print(f"  JP: {s.segment.text}\n  VI: {s.translation}")
-        print("  Token-level contextual meanings:")
-        for t in s.tokens:
-            if t.context_meaning:
-                print(f"    - {t.surface} ({t.pos}): {t.context_meaning}")
-        print("  Bunsetsu interactive chunks:")
-        for bp in s.bunsetsu_phrases:
-            print(f"    * [{bp.text}] ({bp.start_time:.1f}s-{bp.end_time:.1f}s) -> {bp.translation}")
-
-    # Display Discovered OOV candidates summary
-    print("\n" + "=" * 80)
-    if result.oov_candidates:
-        print(f" [DISCOVERED OOV TERMS] Phát hiện {len(result.oov_candidates)} từ mới ngoài từ điển:")
-        print("=" * 80)
-        seen_oov = set()
-        for o in result.oov_candidates:
-            if o.term not in seen_oov:
-                print(f"  * {o.term} ({o.suggested_pos}): {o.suggested_meaning} [Score: {o.confidence_score*100:.0f}%]")
-                seen_oov.add(o.term)
-    else:
-        print(" [DISCOVERED OOV TERMS] 100% từ vựng đều có sẵn trong kho tri thức.")
-        print("=" * 80)
-
-    if result.segment.source_url:
-        print(f"\nSource URL: {result.segment.source_url}\nVideo Title: {result.segment.video_title}")
-    if result.segment.video_path:
-        print(f"Video Path: {result.segment.video_path}")
+    _print_pipeline_summary(result)
 
     total_elapsed = time.time() - total_start_time
     logger.info(f"\n>>> [PIPELINE COMPLETED] Total processing time for video: {total_elapsed:.2f}s")
