@@ -1,0 +1,530 @@
+{
+  "xpos": [
+    {
+      "code": "代名詞",
+      "name": "Pronoun",
+      "vietnamese": "Đại từ",
+      "description": "Đại từ chỉ người, vật, địa điểm (ví dụ: 私, 彼, ここ)"
+    },
+    {
+      "code": "副詞",
+      "name": "Adverb",
+      "vietnamese": "Phó từ",
+      "description": "Phó từ bổ nghĩa hành động/trạng thái (ví dụ: ゆっくり, すぐ, もっと)"
+    },
+    {
+      "code": "助動詞",
+      "name": "Auxiliary Verb",
+      "vietnamese": "Trợ động từ",
+      "description": "Trợ động từ biểu thị thể, thời, ý chí (ví dụ: だ, です, ます, ない, た, れる)"
+    },
+    {
+      "code": "助詞-係助詞",
+      "name": "Particle - Binding",
+      "vietnamese": "Trợ từ liên kết/nhấn mạnh",
+      "description": "Trợ từ nhấn mạnh/nêu chủ đề (ví dụ: は, も, こそ, さえ)"
+    },
+    {
+      "code": "助詞-副助詞",
+      "name": "Particle - Adverbial",
+      "vietnamese": "Phó trợ từ",
+      "description": "Trợ từ biểu thị mức độ, phạm vi (ví dụ: だけ, ばかり, ほど, くらい)"
+    },
+    {
+      "code": "助詞-接続助詞",
+      "name": "Particle - Conjunctional",
+      "vietnamese": "Trợ từ nối tiếp",
+      "description": "Nối tiếp mệnh đề chỉ điều kiện, nguyên nhân, chuyển tiếp (ví dụ: て, たら, ので, から)"
+    },
+    {
+      "code": "助詞-格助詞",
+      "name": "Particle - Case",
+      "vietnamese": "Trợ từ cách (Cách trợ từ)",
+      "description": "Chỉ quan hệ ngữ pháp giữa danh từ và vị ngữ (ví dụ: が, を, に, で, へ, と, から, より)"
+    },
+    {
+      "code": "助詞-準体助詞",
+      "name": "Particle - Phrasal",
+      "vietnamese": "Trợ từ danh từ hoá",
+      "description": "Trợ từ thay thế hoặc danh từ hoá ngữ (ví dụ: の - trong 赤いのが好き)"
+    },
+    {
+      "code": "助詞-終助詞",
+      "name": "Particle - Sentence-final",
+      "vietnamese": "Trợ từ cuối câu (Thán trợ từ)",
+      "description": "Biểu thị ngữ điệu, cảm xúc người nói ở cuối câu (ví dụ: ね, よ, な, わ, か)"
+    },
+    {
+      "code": "動詞-一般",
+      "name": "Verb - General",
+      "vietnamese": "Động từ thông thường",
+      "description": "Động từ độc lập biểu thị hành động, trạng thái (ví dụ: 走る, 読む, 聞く)"
+    },
+    {
+      "code": "動詞-非自立可能",
+      "name": "Verb - Bound/Auxiliary capable",
+      "vietnamese": "Động từ có thể làm trợ động từ",
+      "description": "Động từ phụ/hỗ trợ ngữ pháp khi đi sau て (ví dụ: いる, みる, くる, いく, くれる)"
+    },
+    {
+      "code": "名詞-助動詞語幹",
+      "name": "Noun - Auxiliary Stem",
+      "vietnamese": "Gốc danh từ làm trợ động từ",
+      "description": "Gốc từ danh từ có chức năng tương tự trợ động từ"
+    },
+    {
+      "code": "名詞-固有名詞-一般",
+      "name": "Proper Noun - General",
+      "vietnamese": "Danh từ riêng thông thường",
+      "description": "Tên tổ chức, thương hiệu, tác phẩm (ví dụ: Google, トヨタ)"
+    },
+    {
+      "code": "名詞-固有名詞-人名-一般",
+      "name": "Proper Noun - Person General",
+      "vietnamese": "Tên người chung",
+      "description": "Tên nhân vật lịch sử, tên đầy đủ"
+    },
+    {
+      "code": "名詞-固有名詞-人名-名",
+      "name": "Proper Noun - Given Name",
+      "vietnamese": "Tên riêng (Tên gọi)",
+      "description": "Phần tên trong họ tên người (ví dụ: 太郎, 花子, Huy)"
+    },
+    {
+      "code": "名詞-固有名詞-人名-姓",
+      "name": "Proper Noun - Surname",
+      "vietnamese": "Họ của người",
+      "description": "Phần họ trong họ tên người (ví dụ: 田中, 佐藤, Nguyễn)"
+    },
+    {
+      "code": "名詞-固有名詞-地名-一般",
+      "name": "Proper Noun - Place General",
+      "vietnamese": "Địa danh chung",
+      "description": "Tên thành phố, quận, địa điểm (ví dụ: 銀座, 新宿, 京都)"
+    },
+    {
+      "code": "名詞-固有名詞-地名-国",
+      "name": "Proper Noun - Country",
+      "vietnamese": "Tên quốc gia",
+      "description": "Tên đất nước (ví dụ: 日本, ベトナム, アメリカ)"
+    },
+    {
+      "code": "名詞-数詞",
+      "name": "Noun - Numeral",
+      "vietnamese": "Số từ",
+      "description": "Chữ số, số lượng (ví dụ: 一, 二, 1, 2)"
+    },
+    {
+      "code": "名詞-普通名詞-サ変可能",
+      "name": "Noun - Suru Verb capable",
+      "vietnamese": "Danh từ có thể ghép する",
+      "description": "Danh từ hành động (ví dụ: 勉強, 説明, 案内, 連絡)"
+    },
+    {
+      "code": "名詞-普通名詞-サ変形状詞可能",
+      "name": "Noun - Suru & Na-Adj capable",
+      "vietnamese": "Danh từ vừa làm する vừa làm tính từ な",
+      "description": "Từ linh hoạt (ví dụ: 安心, 心配)"
+    },
+    {
+      "code": "名詞-普通名詞-一般",
+      "name": "Noun - Common General",
+      "vietnamese": "Danh từ chung",
+      "description": "Danh từ thông dụng chỉ sự vật, hiện tượng (ví dụ: 友達, 言葉, 本)"
+    },
+    {
+      "code": "名詞-普通名詞-副詞可能",
+      "name": "Noun - Adverbial capable",
+      "vietnamese": "Danh từ kiêm phó từ",
+      "description": "Danh từ có thể dùng độc lập như phó từ chỉ thời gian (ví dụ: 昨日, 今日, 今)"
+    },
+    {
+      "code": "名詞-普通名詞-助数詞可能",
+      "name": "Noun - Counter capable",
+      "vietnamese": "Danh từ có thể làm lượng từ",
+      "description": "Danh từ dùng kèm số để đếm (ví dụ: 箇, 冊)"
+    },
+    {
+      "code": "名詞-普通名詞-形状詞可能",
+      "name": "Noun - Na-Adj capable",
+      "vietnamese": "Danh từ có thể làm tính từ な",
+      "description": "Danh từ có thể đi với な (ví dụ: 自由, 平和)"
+    },
+    {
+      "code": "形容詞-一般",
+      "name": "Adjective - General",
+      "vietnamese": "Tính từ đuôi い",
+      "description": "Tính từ i thuần túy (ví dụ: 美しい, 高い, 寒い)"
+    },
+    {
+      "code": "形容詞-非自立可能",
+      "name": "Adjective - Bound capable",
+      "vietnamese": "Tính từ đuôi い phụ thuộc",
+      "description": "Tính từ đuôi i làm bổ ngữ phụ thuộc (ví dụ: ない, よい, ほしい)"
+    },
+    {
+      "code": "形状詞-タリ",
+      "name": "Adjectival Noun - Tari",
+      "vietnamese": "Tính từ hình thái たり",
+      "description": "Tính từ cổ/văn viết kết thúc bằng たり (ví dụ: 堂々, 悠々)"
+    },
+    {
+      "code": "形状詞-一般",
+      "name": "Adjectival Noun - General (Na-Adj)",
+      "vietnamese": "Tính từ đuôi な (Hình trạng từ)",
+      "description": "Tính từ na thông dụng (ví dụ: 丁寧, 静か, 便利, きれい)"
+    },
+    {
+      "code": "形状詞-助動詞語幹",
+      "name": "Adjectival Noun - Aux Stem",
+      "vietnamese": "Gốc hình trạng từ đi kèm trợ động từ",
+      "description": "Gốc từ tính từ ghép trợ từ"
+    },
+    {
+      "code": "感動詞-フィラー",
+      "name": "Interjection - Filler",
+      "vietnamese": "Từ đệm ngập ngừng",
+      "description": "Âm thanh đệm khi suy nghĩ trong hội thoại (ví dụ: ええと, あのー, うーん)"
+    },
+    {
+      "code": "感動詞-一般",
+      "name": "Interjection - General",
+      "vietnamese": "Thán từ chung",
+      "description": "Tiếng chào, kêu gọi, cảm thán (ví dụ: はい, いいえ, ありがとう, こんにちは)"
+    },
+    {
+      "code": "接尾辞-動詞的",
+      "name": "Suffix - Verbal",
+      "vietnamese": "Hậu tố tạo động từ",
+      "description": "Hậu tố gắn sau tạo động từ (ví dụ: ぶる, づける)"
+    },
+    {
+      "code": "接尾辞-名詞的-サ変可能",
+      "name": "Suffix - Noun Suru",
+      "vietnamese": "Hậu tố tạo danh từ ghép する",
+      "description": "Hậu tố biến thành danh từ sahen (ví dụ: 化, 視)"
+    },
+    {
+      "code": "接尾辞-名詞的-一般",
+      "name": "Suffix - Noun General",
+      "vietnamese": "Hậu tố tạo danh từ chung",
+      "description": "Hậu tố chỉ người, vật, tình trạng (ví dụ: たち, 達, 性)"
+    },
+    {
+      "code": "接尾辞-名詞的-副詞可能",
+      "name": "Suffix - Noun Adverbial",
+      "vietnamese": "Hậu tố tạo phó từ",
+      "description": "Hậu tố tạo từ chỉ thời gian, tần suất (ví dụ: ごと, 毎)"
+    },
+    {
+      "code": "接尾辞-名詞的-助数詞",
+      "name": "Suffix - Counter",
+      "vietnamese": "Hậu tố lượng từ (Đơn vị đếm)",
+      "description": "Đơn vị đếm đứng sau số từ (ví dụ: 個, 本, 人, 匹, 歳)"
+    },
+    {
+      "code": "接尾辞-形容詞的",
+      "name": "Suffix - Adjectival",
+      "vietnamese": "Hậu tố tạo tính từ đuôi い",
+      "description": "Hậu tố biến từ thành tính từ đuôi i (ví dụ: ぽい, らしい)"
+    },
+    {
+      "code": "接尾辞-形状詞的",
+      "name": "Suffix - Na-Adj",
+      "vietnamese": "Hậu tố tạo tính từ đuôi な",
+      "description": "Hậu tố biến từ thành tính từ đuôi na (ví dụ: 的, 風)"
+    },
+    {
+      "code": "接続詞",
+      "name": "Conjunction",
+      "vietnamese": "Liên từ",
+      "description": "Từ nối câu độc lập (ví dụ: しかし, だから, また, そして)"
+    },
+    {
+      "code": "接頭辞",
+      "name": "Prefix",
+      "vietnamese": "Tiếp đầu ngữ (Tiền tố)",
+      "description": "Đứng trước danh từ/động từ để lịch sự hoặc bổ nghĩa (ví dụ: お, ご, 御, 第, 超)"
+    },
+    {
+      "code": "空白",
+      "name": "Whitespace",
+      "vietnamese": "Khoảng trắng",
+      "description": "Khoảng trống giữa các từ hoặc thụt lề"
+    },
+    {
+      "code": "補助記号-一般",
+      "name": "Auxiliary Symbol - General",
+      "vietnamese": "Ký hiệu phụ trợ chung",
+      "description": "Các ký tự biểu tượng, dấu chấm lửng (ví dụ: …, ・)"
+    },
+    {
+      "code": "補助記号-句点",
+      "name": "Auxiliary Symbol - Period",
+      "vietnamese": "Dấu chấm hết câu",
+      "description": "Dấu chấm tròn tiếng Nhật (。)"
+    },
+    {
+      "code": "補助記号-括弧閉",
+      "name": "Auxiliary Symbol - Close Bracket",
+      "vietnamese": "Dấu đóng ngoặc",
+      "description": "Ngoặc đóng (ví dụ: 」, ）, 】)"
+    },
+    {
+      "code": "補助記号-括弧開",
+      "name": "Auxiliary Symbol - Open Bracket",
+      "vietnamese": "Dấu mở ngoặc",
+      "description": "Ngoặc mở (ví dụ: 「, （, 【)"
+    },
+    {
+      "code": "補助記号-読点",
+      "name": "Auxiliary Symbol - Comma",
+      "vietnamese": "Dấu phẩy ngắt nhịp",
+      "description": "Dấu phẩy tiếng Nhật (、)"
+    },
+    {
+      "code": "補助記号-ＡＡ-一般",
+      "name": "Auxiliary Symbol - ASCII Art",
+      "vietnamese": "Ký hiệu ASCII Art",
+      "description": "Hình vẽ tạo từ ký tự text"
+    },
+    {
+      "code": "補助記号-ＡＡ-顔文字",
+      "name": "Auxiliary Symbol - Kaomoji",
+      "vietnamese": "Ký hiệu mặt cười Kaomoji",
+      "description": "Biểu tượng cảm xúc Nhật (ví dụ: (^^), (T_T))"
+    },
+    {
+      "code": "記号-一般",
+      "name": "Symbol - General",
+      "vietnamese": "Ký hiệu chung",
+      "description": "Ký hiệu văn bản thông dụng"
+    },
+    {
+      "code": "記号-文字",
+      "name": "Symbol - Character",
+      "vietnamese": "Ký hiệu chữ cái đặc biệt",
+      "description": "Ký hiệu như chữ La Tinh, chữ cái Hy Lạp"
+    },
+    {
+      "code": "連体詞",
+      "name": "Adnominal (Determiner)",
+      "vietnamese": "Liên thể từ",
+      "description": "Từ chỉ định không biến đổi đứng trước danh từ (ví dụ: この, その, あの, ある, いわゆる)"
+    }
+  ],
+  "deprel": [
+    {
+      "code": "root",
+      "name": "Root",
+      "vietnamese": "Vị ngữ trung tâm (Gốc câu)",
+      "description": "Động từ/danh từ vị ngữ đóng vai trò trung tâm của cả câu"
+    },
+    {
+      "code": "nsubj",
+      "name": "Nominal Subject",
+      "vietnamese": "Chủ ngữ danh từ",
+      "description": "Chủ ngữ của câu hoặc của mệnh đề phụ (đi với が hoặc は)"
+    },
+    {
+      "code": "obj",
+      "name": "Object",
+      "vietnamese": "Tân ngữ trực tiếp",
+      "description": "Tân ngữ nhận tác động trực tiếp của động từ (đi với を)"
+    },
+    {
+      "code": "iobj",
+      "name": "Indirect Object",
+      "vietnamese": "Tân ngữ gián tiếp",
+      "description": "Đối tượng tiếp nhận hành động (thường đi với に)"
+    },
+    {
+      "code": "obl",
+      "name": "Oblique Nominal",
+      "vietnamese": "Trạng ngữ danh từ",
+      "description": "Thành phần danh ngữ chỉ nơi chốn, thời gian, công cụ, đối tác (đi với で, に, から, について)"
+    },
+    {
+      "code": "advmod",
+      "name": "Adverbial Modifier",
+      "vietnamese": "Bổ ngữ phó từ",
+      "description": "Phó từ bổ nghĩa cho động từ, tính từ hoặc câu (ví dụ: 昨日, とても)"
+    },
+    {
+      "code": "advcl",
+      "name": "Adverbial Clause",
+      "vietnamese": "Mệnh đề trạng ngữ phụ",
+      "description": "Mệnh đề phụ chỉ nguyên nhân, điều kiện, tiền đề, so sánh (ví dụ: たら, て, より)"
+    },
+    {
+      "code": "acl",
+      "name": "Adnominal Clause",
+      "vietnamese": "Mệnh đề định ngữ",
+      "description": "Mệnh đề bổ nghĩa cho danh từ đứng sau (ví dụ: 勉強をしている [友達], 分からない [言葉])"
+    },
+    {
+      "code": "amod",
+      "name": "Adjectival Modifier",
+      "vietnamese": "Bổ ngữ tính từ",
+      "description": "Tính từ bổ nghĩa trực tiếp cho danh từ (ví dụ: 美しい 花)"
+    },
+    {
+      "code": "nmod",
+      "name": "Nominal Modifier",
+      "vietnamese": "Bổ ngữ danh từ",
+      "description": "Danh từ bổ nghĩa cho danh từ khác qua trợ từ の (ví dụ: 試験の [勉強])"
+    },
+    {
+      "code": "nummod",
+      "name": "Numeric Modifier",
+      "vietnamese": "Bổ ngữ số lượng",
+      "description": "Số lượng bổ nghĩa cho danh từ (ví dụ: 3冊の 本)"
+    },
+    {
+      "code": "compound",
+      "name": "Compound",
+      "vietnamese": "Từ ghép phức hợp",
+      "description": "Thành phần tạo nên danh từ ghép phức hợp (ví dụ: 日本語 + 能力 + 試験, 接頭辞 ご + 一緒)"
+    },
+    {
+      "code": "case",
+      "name": "Case Particle",
+      "vietnamese": "Trợ từ cách",
+      "description": "Trợ từ gắn với danh từ để thể hiện vai trò cách cú pháp (ví dụ: の, を, に, で, より)"
+    },
+    {
+      "code": "mark",
+      "name": "Marker",
+      "vietnamese": "Trợ từ kết nối mệnh đề",
+      "description": "Trợ từ hoặc liên từ đánh dấu kết thúc mệnh đề phụ (ví dụ: て, から, ので)"
+    },
+    {
+      "code": "aux",
+      "name": "Auxiliary",
+      "vietnamese": "Trợ từ/Trợ động từ bổ trợ",
+      "description": "Trợ động từ gắn kèm vị ngữ chỉ thì, thể, phủ định, kính ngữ (ví dụ: た, ます, ない, だ)"
+    },
+    {
+      "code": "cop",
+      "name": "Copula",
+      "vietnamese": "Hệ từ liên kết",
+      "description": "Từ nối định danh quan hệ A là B (ví dụ: だ, である)"
+    },
+    {
+      "code": "fixed",
+      "name": "Fixed Multiword",
+      "vietnamese": "Cụm từ ngữ cố định",
+      "description": "Cụm từ nhiều thành phần kết hợp thành một khối ngữ pháp (ví dụ: に+つい+て, て+みる, て+いる, て+くれる)"
+    },
+    {
+      "code": "flat",
+      "name": "Flat Name/Multiword",
+      "vietnamese": "Cụm tên ngang hàng",
+      "description": "Các từ ghép tên người, danh hiệu không có quan hệ phân cấp (ví dụ: 田中 太郎)"
+    },
+    {
+      "code": "conj",
+      "name": "Conjunct",
+      "vietnamese": "Thành phần đẳng lập",
+      "description": "Thành phần được liên kết đẳng lập với từ phía trước (ví dụ: リンゴ と バナナ)"
+    },
+    {
+      "code": "cc",
+      "name": "Coordinating Conjunction",
+      "vietnamese": "Liên từ kết hợp",
+      "description": "Liên từ liên kết thành phần đẳng lập (ví dụ: そして, また)"
+    },
+    {
+      "code": "csubj",
+      "name": "Clausal Subject",
+      "vietnamese": "Mệnh đề làm chủ ngữ",
+      "description": "Mệnh đề đóng vai trò chủ ngữ của câu"
+    },
+    {
+      "code": "ccomp",
+      "name": "Clausal Complement",
+      "vietnamese": "Mệnh đề bổ ngữ nội dung",
+      "description": "Mệnh đề trích dẫn hoặc làm bổ ngữ cho động từ nhận thức (ví dụ: と 思う)"
+    },
+    {
+      "code": "det",
+      "name": "Determiner",
+      "vietnamese": "Từ chỉ định",
+      "description": "Từ chỉ định đứng trước danh từ (ví dụ: この, その)"
+    },
+    {
+      "code": "discourse",
+      "name": "Discourse Element",
+      "vietnamese": "Thành phần đệm/giao tiếp",
+      "description": "Thán từ hoặc thành phần tương tác đối thoại"
+    },
+    {
+      "code": "dislocated",
+      "name": "Dislocated Element",
+      "vietnamese": "Thành phần chủ đề tách rời",
+      "description": "Thành phần chuyển dịch chủ đề ở đầu câu đi với は"
+    },
+    {
+      "code": "clf",
+      "name": "Classifier",
+      "vietnamese": "Lượng từ / Đơn vị đếm",
+      "description": "Từ đếm đi liền số lượng"
+    },
+    {
+      "code": "appos",
+      "name": "Appositional Modifier",
+      "vietnamese": "Đồng vị ngữ",
+      "description": "Danh từ giải thích làm rõ cho danh từ đứng trước"
+    },
+    {
+      "code": "vocative",
+      "name": "Vocative",
+      "vietnamese": "Hô ngữ",
+      "description": "Từ dùng để gọi đáp"
+    },
+    {
+      "code": "punct",
+      "name": "Punctuation",
+      "vietnamese": "Dấu câu",
+      "description": "Dấu chấm, phẩy, ngoặc đơn"
+    }
+  ],
+  "bunsetsu_position_type": [
+    {
+      "code": "ROOT",
+      "name": "Root Head of Clause/Sentence",
+      "vietnamese": "Gốc vị ngữ của văn tiết trung tâm",
+      "description": "Token là gốc ngữ pháp của văn tiết trung tâm của câu (t.i == t.head.i), thường là vị ngữ chính."
+    },
+    {
+      "code": "SEM_HEAD",
+      "name": "Semantic Head of Bunsetsu",
+      "vietnamese": "Trọng tâm ngữ nghĩa của văn tiết",
+      "description": "Token mang nội dung ngữ nghĩa chính (Content Word) của văn tiết, ví dụ danh từ chính hoặc động từ chính trong cụm."
+    },
+    {
+      "code": "SYN_HEAD",
+      "name": "Syntactic Head of Bunsetsu",
+      "vietnamese": "Trọng tâm cú pháp của văn tiết",
+      "description": "Token chức năng (Function Word: AUX, ADP, SCONJ, CCONJ, PART) đứng cuối cùng của chuỗi từ chức năng, liên kết văn tiết với phần còn lại."
+    },
+    {
+      "code": "FUNC",
+      "name": "Secondary Function Word",
+      "vietnamese": "Từ chức năng phụ trợ",
+      "description": "Token chức năng đứng trước SYN_HEAD trong chuỗi từ chức năng của văn tiết (ví dụ khi có nhiều trợ động từ nối tiếp)."
+    },
+    {
+      "code": "CONT",
+      "name": "Continuation / Internal Token",
+      "vietnamese": "Thành phần nội bộ tiếp nối",
+      "description": "Token nằm trong khối nội bộ của văn tiết (tiền tố, từ cấu thành từ ghép, hoặc dấu câu kết nối)."
+    },
+    {
+      "code": "NO_HEAD",
+      "name": "Non-Head Punctuation",
+      "vietnamese": "Dấu câu không có đầu ngữ nghĩa",
+      "description": "Token dấu câu đứng riêng hoặc không tạo thành trọng tâm ngữ nghĩa (thường có dep_ == 'punct')."
+    }
+  ]
+}
