@@ -16,6 +16,13 @@ MediaInspectionResult = _schema.MediaInspectionResult
 VideoType = _schema.VideoType
 MediaSourceType = _schema.MediaSourceType
 
+# Extended Knowledge Models
+_ext_models = importlib.import_module(".extended-models", package=__name__)
+GrammarEntry = _ext_models.GrammarEntry
+PhraseEntry = _ext_models.PhraseEntry
+CompoundWordEntry = _ext_models.CompoundWordEntry
+MatchedKnowledgeUnit = _ext_models.MatchedKnowledgeUnit
+
 # Services
 AsrService = importlib.import_module(".asr-service", package=__name__).AsrService
 NlpService = importlib.import_module(".nlp-service", package=__name__).NlpService
@@ -23,12 +30,13 @@ KnowledgeService = importlib.import_module(".knowledge-service", package=__name_
 LlmEnrichmentService = importlib.import_module(".llm-service", package=__name__).LlmEnrichmentService
 BunsetsuService = importlib.import_module(".bunsetsu-service", package=__name__).BunsetsuService
 YouTubeService = importlib.import_module(".youtube-service", package=__name__).YouTubeService
+GinzaReferenceService = importlib.import_module(".ginza-reference-service", package=__name__).GinzaReferenceService
+HierarchicalKnowledgeMatcher = importlib.import_module(".hierarchical-matcher", package=__name__).HierarchicalKnowledgeMatcher
 _inspector = importlib.import_module(".media-inspector", package=__name__)
 MediaInspector = _inspector.MediaInspector
 InvalidMediaError = _inspector.InvalidMediaError
 InvalidLanguageError = _inspector.InvalidLanguageError
 ProhibitedContentError = _inspector.ProhibitedContentError
-
 __all__ = [
     "SubtitleSegment",
     "TokenModel",
@@ -47,8 +55,15 @@ __all__ = [
     "LlmEnrichmentService",
     "BunsetsuService",
     "YouTubeService",
+    "GinzaReferenceService",
     "MediaInspector",
     "InvalidMediaError",
     "InvalidLanguageError",
     "ProhibitedContentError",
+    "GrammarEntry",
+    "PhraseEntry",
+    "CompoundWordEntry",
+    "MatchedKnowledgeUnit",
+    "HierarchicalKnowledgeMatcher",
 ]
+

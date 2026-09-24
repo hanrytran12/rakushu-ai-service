@@ -25,3 +25,4 @@
 - `TOKEN`: references `DICTIONARY_ENTRY` or triggers `OOV_CANDIDATE`.
 - `OOV_CANDIDATE`: routed to `CURATOR_REVIEW` for human-in-the-loop vocabulary enrichment.
 - `PHRASE`: interactive Bunsetsu units rendered directly on the Learner video subtitle canvas.
+

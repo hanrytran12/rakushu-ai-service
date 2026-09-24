@@ -9,7 +9,7 @@ if sys.stdout.encoding != "utf-8":
         pass
 
 from src import (
-    SubtitleSegment, SentenceSubtitle, PipelineResult, AsrService,
+    SubtitleSegment, SentenceSubtitle, PipelineResult, DictionaryEntry, AsrService,
     NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
     InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
 )
@@ -109,8 +109,9 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
         # Step A: NLP Morphological Analysis
         tokens = nlp_svc.tokenize(sent_seg)
-        # Step B: Knowledge Matching & OOV Detection
-        matched_k, oov_toks = knowledge_svc.match_tokens(tokens)
+        # Step B: Hierarchical Knowledge Matching (Grammar -> Phrase -> CompoundWord -> Word)
+        hier_units, oov_toks = knowledge_svc.match_hierarchical(tokens, sent_text)
+        matched_k = [DictionaryEntry(term=u.surface, reading=u.reading, pos=u.unit_type, meaning=u.meaning) for u in hier_units]
         all_matched.extend(matched_k)
 
         # Step C: Sentence Translation guided by Global Context & Token Meanings
