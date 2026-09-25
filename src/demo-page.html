@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rakushu AI - Video Stream Inspector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <span class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">楽習 Rakushu AI</span>
+        <span class="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">Stream Inspector</span>
+      </div>
+      <a href="/docs" target="_blank" class="text-sm text-slate-600 hover:text-indigo-600 flex items-center gap-1 font-medium transition">
+        <span>Swagger API</span> &rarr;
+      </a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Controls Panel -->
+    <div class="lg:col-span-4 space-y-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 class="text-base font-semibold text-slate-800 mb-3">Nguồn Dữ Liệu Stream</h2>
+        <div class="flex border-b border-slate-200 mb-4">
+          <button id="tabUploadBtn" class="flex-1 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition">Upload File</button>
+          <button id="tabUrlBtn" class="flex-1 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition">YouTube / URL</button>
+        </div>
+
+        <!-- Form Upload -->
+        <div id="uploadTab" class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">File Video / Audio</label>
+          <input type="file" id="videoFileInput" accept=".mp4,.mov,.m4a,.mp3,.wav,.webm" class="block w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+          <p class="text-xs text-slate-400">Hỗ trợ MP4, WebM, WAV, MP3... (ví dụ: samples/japanese_podcast_10s.mp4)</p>
+        </div>
+
+        <!-- Form URL -->
+        <div id="urlTab" class="space-y-3 hidden">
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Link Video</label>
+          <input type="text" id="videoUrlInput" placeholder="https://youtube.com/watch?v=..." class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <button id="startStreamBtn" class="w-full mt-5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-2">
+          <span id="btnText">Bắt đầu Stream</span>
+          <div id="btnSpinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+        </button>
+      </div>
+
+      <!-- Live Stage Tracker -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tiến trình Pipeline</h3>
+        <div class="space-y-2 text-xs">
+          <div id="step-started" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 1. Khởi động kết nối</div>
+          <div id="step-asr" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 2. Whisper ASR phiên âm</div>
+          <div id="step-global" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 3. Dịch ngữ cảnh toàn bài</div>
+          <div id="step-sentence" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 4. Làm giàu ngữ pháp & từ vựng</div>
+        </div>
+        <div id="globalTranslationBox" class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 hidden">
+          <p class="text-[11px] font-semibold text-indigo-700 uppercase mb-1">Dịch Tổng Quan:</p>
+          <p id="globalTranslationText" class="text-xs text-slate-700 leading-relaxed"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Stream Results -->
+    <div class="lg:col-span-8 space-y-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm min-h-[550px] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-semibold text-slate-800">Kết quả Realtime</h2>
+            <span id="sentenceCountBadge" class="hidden text-xs bg-emerald-100 text-emerald-700 font-semibold px-2 py-0.5 rounded-full">0 câu</span>
+          </div>
+          <div id="livePinger" class="hidden flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Stream Đang Chạy
+          </div>
+        </div>
+
+        <div id="emptyPlaceholder" class="flex-1 flex flex-col items-center justify-center text-slate-400 py-16">
+          <svg class="w-12 h-12 mb-3 stroke-current stroke-1 text-slate-300" viewBox="0 0 24 24" fill="none"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <p class="text-sm">Chọn file video hoặc nhập link rồi nhấn <b>Bắt đầu Stream</b>.</p>
+        </div>
+
+        <div id="sentencesContainer" class="space-y-4 custom-scrollbar overflow-y-auto max-h-[650px] pr-1"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let activeTab = 'upload';
+    const tabUploadBtn = document.getElementById('tabUploadBtn');
+    const tabUrlBtn = document.getElementById('tabUrlBtn');
+    const uploadTab = document.getElementById('uploadTab');
+    const urlTab = document.getElementById('urlTab');
+    const startStreamBtn = document.getElementById('startStreamBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const livePinger = document.getElementById('livePinger');
+    const sentencesContainer = document.getElementById('sentencesContainer');
+    const emptyPlaceholder = document.getElementById('emptyPlaceholder');
+    const sentenceCountBadge = document.getElementById('sentenceCountBadge');
+    const globalTranslationBox = document.getElementById('globalTranslationBox');
+    const globalTranslationText = document.getElementById('globalTranslationText');
+
+    tabUploadBtn.onclick = () => {
+      activeTab = 'upload';
+      tabUploadBtn.className = 'flex-1 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition';
+      tabUrlBtn.className = 'flex-1 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition';
+      uploadTab.classList.remove('hidden');
+      urlTab.classList.add('hidden');
+    };
+
+    tabUrlBtn.onclick = () => {
+      activeTab = 'url';
+      tabUrlBtn.className = 'flex-1 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition';
+      tabUploadBtn.className = 'flex-1 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition';
+      urlTab.classList.remove('hidden');
+      uploadTab.classList.add('hidden');
+    };
+
+    function markStepActive(stepId) {
+      const el = document.getElementById(stepId);
+      if (el) {
+        el.className = 'flex items-center gap-2 text-indigo-600 font-semibold';
+        el.firstElementChild.className = 'w-2 h-2 rounded-full bg-indigo-600 animate-pulse';
+      }
+    }
+
+    function markStepDone(stepId) {
+      const el = document.getElementById(stepId);
+      if (el) {
+        el.className = 'flex items-center gap-2 text-emerald-600 font-medium';
+        el.firstElementChild.className = 'w-2 h-2 rounded-full bg-emerald-500';
+      }
+    }
+
+    startStreamBtn.onclick = async () => {
+      sentencesContainer.innerHTML = '';
+      emptyPlaceholder.classList.add('hidden');
+      globalTranslationBox.classList.add('hidden');
+      sentenceCountBadge.classList.add('hidden');
+      startStreamBtn.disabled = true;
+      btnText.textContent = 'Đang xử lý stream...';
+      btnSpinner.classList.remove('hidden');
+      livePinger.classList.remove('hidden');
+
+      let endpoint = activeTab === 'upload' ? '/api/v1/pipeline/stream-upload' : '/api/v1/pipeline/stream-url';
+      let options = { method: 'POST' };
+
+      if (activeTab === 'upload') {
+        const file = document.getElementById('videoFileInput').files[0];
+        if (!file) { alert('Vui lòng chọn 1 file video/audio!'); resetBtn(); return; }
+        const fd = new FormData();
+        fd.append('file', file);
+        options.body = fd;
+      } else {
+        const url = document.getElementById('videoUrlInput').value.trim();
+        if (!url) { alert('Vui lòng nhập link URL!'); resetBtn(); return; }
+        options.headers = { 'Content-Type': 'application/json' };
+        options.body = JSON.stringify({ url });
+      }
+
+      try {
+        const response = await fetch(endpoint, options);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error('Lỗi kết nối (' + response.status + '): ' + errText);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let count = 0;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();
+
+          for (const block of parts) {
+            const lines = block.split('\n');
+            let eventType = 'message';
+            let dataStr = '';
+            for (const line of lines) {
+              if (line.startsWith('event:')) eventType = line.slice(6).trim();
+              else if (line.startsWith('data:')) dataStr = line.slice(5).trim();
+            }
+
+            if (dataStr) {
+              try {
+                const parsed = JSON.parse(dataStr);
+                const payload = parsed.data || parsed;
+                handleStreamEvent(eventType, payload, () => {
+                  count++;
+                  sentenceCountBadge.textContent = count + ' câu';
+                  sentenceCountBadge.classList.remove('hidden');
+                });
+              } catch (e) { console.error('Parse JSON lỗi:', e); }
+            }
+          }
+        }
+      } catch (err) {
+        alert('Lỗi: ' + err.message);
+      } finally {
+        resetBtn();
+      }
+    };
+
+    function resetBtn() {
+      startStreamBtn.disabled = false;
+      btnText.textContent = 'Bắt đầu Stream';
+      btnSpinner.classList.add('hidden');
+      livePinger.classList.add('hidden');
+    }
+
+    function handleStreamEvent(type, data, onSent) {
+      if (type === 'pipeline_started') {
+        markStepActive('step-started');
+      } else if (type === 'progress') {
+        if (data.step === 'asr') {
+          markStepDone('step-started');
+          markStepActive('step-asr');
+        } else if (data.step === 'global_translation') {
+          markStepDone('step-asr');
+          markStepActive('step-global');
+        }
+      } else if (type === 'global_translation_completed') {
+        markStepDone('step-global');
+        markStepActive('step-sentence');
+        if (data.translation) {
+          globalTranslationText.textContent = data.translation;
+          globalTranslationBox.classList.remove('hidden');
+        }
+      } else if (type === 'sentence_processed') {
+        onSent();
+        renderSentenceCard(data);
+      } else if (type === 'pipeline_completed') {
+        markStepDone('step-sentence');
+      }
+    }
+
+    function renderSentenceCard(s) {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 transition shadow-sm space-y-2';
+
+      let phrasesHtml = '';
+      if (s.bunsetsu_phrases && s.bunsetsu_phrases.length) {
+        phrasesHtml = `<div class="flex flex-wrap gap-1.5 pt-1">` +
+          s.bunsetsu_phrases.map(p =>
+            `<span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-medium" title="${p.translation || ''}">${p.text}</span>`
+          ).join('') + `</div>`;
+      }
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span class="font-semibold text-indigo-600">Câu #${s.sequence_number || s.sequenceNumber}</span>
+          <span>${s.start_time}s &rarr; ${s.end_time}s</span>
+        </div>
+        <p class="text-base font-semibold text-slate-900 leading-snug">${s.text}</p>
+        <p class="text-sm text-emerald-700 font-medium">${s.translation || '—'}</p>
+        ${phrasesHtml}
+      `;
+      sentencesContainer.appendChild(card);
+      card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  </script>
+</body>
+</html>

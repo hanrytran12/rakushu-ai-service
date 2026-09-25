@@ -20,12 +20,9 @@ from src import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RakushuPipeline")
 
-
 def _print_pipeline_summary(result: PipelineResult):
     """Prints a structured summary of translation, tokens, bunsetsu, and OOVs."""
-    print("\n" + "=" * 80)
-    print(" [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:")
-    print("=" * 80)
+    print(f"\n{'=' * 80}\n [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:\n{'=' * 80}")
     print(f'Global Transcript: "{result.segment.text}"')
     print(f'Global Translation: "{result.full_translation}"')
     for idx, s in enumerate(result.sentences, start=1):
@@ -55,7 +52,6 @@ def _print_pipeline_summary(result: PipelineResult):
         print(f"\nSource URL: {result.segment.source_url}\nVideo Title: {result.segment.video_title}")
     if result.segment.video_path:
         print(f"Video Path: {result.segment.video_path}")
-
 
 def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> PipelineResult:
     total_start_time = time.time()
@@ -194,7 +190,6 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     total_elapsed = time.time() - total_start_time
     logger.info(f"\n>>> [PIPELINE COMPLETED] Total processing time for video: {total_elapsed:.2f}s")
     return result
-
 
 if __name__ == "__main__":
     media_file = sys.argv[1] if len(sys.argv) > 1 else "samples/japanese_podcast_10s.mp4"
