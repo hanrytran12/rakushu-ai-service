@@ -20,12 +20,9 @@ from src import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RakushuPipeline")
 
-
 def _print_pipeline_summary(result: PipelineResult):
     """Prints a structured summary of translation, tokens, bunsetsu, and OOVs."""
-    print("\n" + "=" * 80)
-    print(" [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:")
-    print("=" * 80)
+    print(f"\n{'=' * 80}\n [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:\n{'=' * 80}")
     print(f'Global Transcript: "{result.segment.text}"')
     print(f'Global Translation: "{result.full_translation}"')
     for idx, s in enumerate(result.sentences, start=1):
@@ -55,7 +52,6 @@ def _print_pipeline_summary(result: PipelineResult):
         print(f"\nSource URL: {result.segment.source_url}\nVideo Title: {result.segment.video_title}")
     if result.segment.video_path:
         print(f"Video Path: {result.segment.video_path}")
-
 
 def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> PipelineResult:
     total_start_time = time.time()
@@ -124,7 +120,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     total_chars = max(len(full_segment.text), 1)
     total_dur = full_segment.end_time - full_segment.start_time
     curr_char = 0
-    sentence_subtitles, all_tokens, all_matched, all_bunsetsu = [], [], [], []
+    sentence_subtitles, all_tokens, all_matched, all_knowledge_units, all_bunsetsu = [], [], [], [], []
 
     # 4. Stage 2: Sentence-by-Sentence Contextual Translation & Token Meaning Extraction
     t3 = time.time()
@@ -152,6 +148,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         hier_units, oov_toks = knowledge_svc.match_hierarchical(tokens, sent_text)
         matched_k = [DictionaryEntry(term=u.surface, reading=u.reading, pos=u.unit_type, meaning=u.meaning) for u in hier_units]
         all_matched.extend(matched_k)
+        all_knowledge_units.extend(hier_units)
 
         # Step C: Sentence Translation guided by Global Context & Token Meanings
         s_trans_vi, token_meanings, enriched_oovs = llm_svc.translate_sentence_with_context(
@@ -174,7 +171,8 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
         sentence_subtitles.append(SentenceSubtitle(
             segment=sent_seg, translation=s_trans_vi, tokens=tokens,
-            matched_knowledge=matched_k, oov_candidates=enriched_oovs, bunsetsu_phrases=phrases,
+            matched_knowledge=matched_k, knowledge_units=hier_units,
+            oov_candidates=enriched_oovs, bunsetsu_phrases=phrases,
         ))
         logger.info(f"   [Sentence #{idx} Done] Elapsed: {time.time() - s_t0:.2f}s")
     logger.info(f"   [STEP 4 COMPLETED] All sentences translated in: {time.time() - t3:.2f}s")
@@ -182,7 +180,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     # 5. Assemble Consolidated Pipeline Result
     result = PipelineResult(
         segment=full_segment, full_translation=full_translation,
-        tokens=all_tokens, matched_knowledge=all_matched,
+        tokens=all_tokens, matched_knowledge=all_matched, knowledge_units=all_knowledge_units,
         oov_candidates=[o for s in sentence_subtitles for o in s.oov_candidates],
         bunsetsu_phrases=all_bunsetsu, sentences=sentence_subtitles,
     )
@@ -192,7 +190,6 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     total_elapsed = time.time() - total_start_time
     logger.info(f"\n>>> [PIPELINE COMPLETED] Total processing time for video: {total_elapsed:.2f}s")
     return result
-
 
 if __name__ == "__main__":
     media_file = sys.argv[1] if len(sys.argv) > 1 else "samples/japanese_podcast_10s.mp4"

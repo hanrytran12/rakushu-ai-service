@@ -1,6 +1,6 @@
 """Data models aligned with the Rakushu Capstone Logical ERD."""
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional
+from typing import List, Optional, Any
 import uuid
 
 
@@ -115,6 +115,7 @@ class SentenceSubtitle:
     translation: str = ""
     tokens: List[TokenModel] = field(default_factory=list)
     matched_knowledge: List[DictionaryEntry] = field(default_factory=list)
+    knowledge_units: List[Any] = field(default_factory=list)
     oov_candidates: List[OovCandidate] = field(default_factory=list)
     bunsetsu_phrases: List[BunsetsuPhrase] = field(default_factory=list)
 
@@ -125,6 +126,7 @@ class SentenceSubtitle:
             "translation": self.translation,
             "tokens": [t.to_dict() for t in self.tokens],
             "matched_knowledge": [k.to_dict() for k in self.matched_knowledge],
+            "knowledge_units": [u.to_dict() if hasattr(u, "to_dict") else u for u in self.knowledge_units],
             "oov_candidates": [o.to_dict() for o in self.oov_candidates],
             "bunsetsu_phrases": [p.to_dict() for p in self.bunsetsu_phrases],
         }
@@ -136,6 +138,7 @@ class PipelineResult:
     full_translation: str = ""
     tokens: List[TokenModel] = field(default_factory=list)
     matched_knowledge: List[DictionaryEntry] = field(default_factory=list)
+    knowledge_units: List[Any] = field(default_factory=list)
     oov_candidates: List[OovCandidate] = field(default_factory=list)
     bunsetsu_phrases: List[BunsetsuPhrase] = field(default_factory=list)
     sentences: List[SentenceSubtitle] = field(default_factory=list)
@@ -146,6 +149,7 @@ class PipelineResult:
             "full_translation": self.full_translation,
             "tokens": [t.to_dict() for t in self.tokens],
             "matched_knowledge": [k.to_dict() for k in self.matched_knowledge],
+            "knowledge_units": [u.to_dict() if hasattr(u, "to_dict") else u for u in self.knowledge_units],
             "oov_candidates": [o.to_dict() for o in self.oov_candidates],
             "bunsetsu_phrases": [p.to_dict() for p in self.bunsetsu_phrases],
             "sentences": [s.to_dict() for s in self.sentences],
