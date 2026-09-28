@@ -82,11 +82,13 @@ class OovCandidate:
     oov_candidate_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     token_id: str = ""
     term: str = ""
+    tentative_reading: str = ""
     suggested_meaning: str = ""
     suggested_pos: str = ""
     context_snippet: str = ""
     confidence_score: float = 0.0
     status: str = "PENDING_CURATOR_REVIEW"
+    detected_at: str = ""
 
     def to_dict(self):
         return asdict(self)

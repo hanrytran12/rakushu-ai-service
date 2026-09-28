@@ -16,16 +16,13 @@ class KnowledgeService:
     DICT_DB = os.path.join(os.path.dirname(__file__), "..", "data", "dictionary.db")
     DEFAULT_DB_PATH = STAGING_DB if os.path.exists(STAGING_DB) else DICT_DB
 
-    CORE_FALLBACK: Dict[str, DictionaryEntry] = {
-        "皆さん": DictionaryEntry(term="皆さん", reading="みなさん", pos="NOUN", meaning="mọi người"),
-        "こんにちは": DictionaryEntry(term="こんにちは", reading="こんにちは", pos="INTERJECTION", meaning="xin chào"),
-        "今日": DictionaryEntry(term="今日", reading="きょう", pos="NOUN", meaning="hôm nay"),
-        "日本": DictionaryEntry(term="日本", reading="にほん", pos="NOUN", meaning="Nhật Bản"),
-        "面白い": DictionaryEntry(term="面白い", reading="おもしろい", pos="ADJECTIVE", meaning="thú vị"),
-        "話す": DictionaryEntry(term="話す", reading="はなす", pos="VERB", meaning="nói, trò chuyện"),
-        "話します": DictionaryEntry(term="話します", reading="はなします", pos="VERB", meaning="nói chuyện"),
-        "について": DictionaryEntry(term="について", reading="について", pos="PARTICLE", meaning="về"),
-    }
+    _FB = [
+        ("皆さん", "みなさん", "NOUN", "mọi người"), ("こんにちは", "こんにちは", "INTERJECTION", "xin chào"),
+        ("今日", "きょう", "NOUN", "hôm nay"), ("日本", "にほん", "NOUN", "Nhật Bản"),
+        ("面白い", "おもしろい", "ADJECTIVE", "thú vị"), ("話す", "はなす", "VERB", "nói, trò chuyện"),
+        ("話します", "はなします", "VERB", "nói chuyện"), ("について", "について", "PARTICLE", "về")
+    ]
+    CORE_FALLBACK: Dict[str, DictionaryEntry] = {t[0]: DictionaryEntry(term=t[0], reading=t[1], pos=t[2], meaning=t[3]) for t in _FB}
 
     def __init__(self, db_path: Optional[str] = None, exclude_terms: Optional[Set[str]] = None):
         self.db_path = db_path or os.path.abspath(self.DEFAULT_DB_PATH)
@@ -92,76 +89,36 @@ class KnowledgeService:
         return self.CORE_FALLBACK.get(word)
 
     def get_tag_info(self, tag_name: str) -> Optional[DefinitionTag]:
-        """Queries linguistic explanation for a definition tag (e.g. 'v1', 'adj-i', 'Buddh')."""
-        if not tag_name:
-            return None
-        r = self._query_one(
-            "SELECT name, category, description_en, description_vi FROM definition_tags WHERE name = ?",
-            (tag_name,)
-        )
+        if not tag_name: return None
+        r = self._query_one("SELECT name, category, description_en, description_vi FROM definition_tags WHERE name = ?", (tag_name,))
         return DefinitionTag(name=r[0], category=r[1], description_en=r[2], description_vi=r[3]) if r else None
 
     def get_rule_info(self, rule_code: str) -> Optional[InflectionRule]:
-        """Queries explanation for verb/adjective inflection rules."""
-        if not rule_code:
-            return None
-        r = self._query_one(
-            "SELECT rule_code, name_vi, description_vi, examples FROM inflection_rules WHERE rule_code = ?",
-            (rule_code,)
-        )
+        if not rule_code: return None
+        r = self._query_one("SELECT rule_code, name_vi, description_vi, examples FROM inflection_rules WHERE rule_code = ?", (rule_code,))
         return InflectionRule(rule_code=r[0], name_vi=r[1], description_vi=r[2], examples=r[3]) if r else None
 
     def lookup_grammar(self, pattern: str) -> Optional[GrammarEntry]:
         """Looks up a grammar pattern (e.g. 'わけにはいかない', '～に対して')."""
-        if not pattern:
-            return None
+        if not pattern: return None
         clean = pattern.lstrip("～~- ")
-        r = self._query_one(
-            "SELECT id, pattern, reading, jlpt_level, formation, meaning, nuance, examples, source "
-            "FROM grammar WHERE pattern = ? OR pattern = ? OR reading = ? LIMIT 1",
-            (pattern, clean, pattern)
-        )
-        if not r:
-            return None
-        return GrammarEntry(
-            id=r[0], pattern=r[1], reading=r[2], jlpt_level=r[3],
-            formation=r[4], meaning=r[5], nuance=r[6], examples=r[7], source=r[8]
-        )
+        r = self._query_one("SELECT id, pattern, reading, jlpt_level, formation, meaning, nuance, examples, source FROM grammar WHERE pattern = ? OR pattern = ? OR reading = ? LIMIT 1", (pattern, clean, pattern))
+        return GrammarEntry(id=r[0], pattern=r[1], reading=r[2], jlpt_level=r[3], formation=r[4], meaning=r[5], nuance=r[6], examples=r[7], source=r[8]) if r else None
 
     def lookup_phrase(self, term: str) -> Optional[PhraseEntry]:
         """Looks up an idiomatic phrase, yojijukugo, or expression."""
-        if not term:
-            return None
-        r = self._query_one(
-            "SELECT id, term, reading, phrase_type, meaning, tags, source "
-            "FROM phrases WHERE term = ? OR reading = ? LIMIT 1",
-            (term, term)
-        )
-        if not r:
-            return None
-        return PhraseEntry(
-            id=r[0], term=r[1], reading=r[2], phrase_type=r[3],
-            meaning=r[4], tags=r[5], source=r[6]
-        )
+        if not term: return None
+        r = self._query_one("SELECT id, term, reading, phrase_type, meaning, tags, source FROM phrases WHERE term = ? OR reading = ? LIMIT 1", (term, term))
+        return PhraseEntry(id=r[0], term=r[1], reading=r[2], phrase_type=r[3], meaning=r[4], tags=r[5], source=r[6]) if r else None
 
     def lookup_compound_word(self, term: str) -> Optional[CompoundWordEntry]:
         """Looks up a compound word (verb or noun) with decomposed components."""
-        if not term:
-            return None
-        r = self._query_one(
-            "SELECT id, term, reading, compound_type, components, components_reading, transitivity, meaning, structure "
-            "FROM compound_words WHERE term = ? OR reading = ? LIMIT 1",
-            (term, term)
-        )
-        if not r:
-            return None
+        if not term: return None
+        r = self._query_one("SELECT id, term, reading, compound_type, components, components_reading, transitivity, meaning, structure FROM compound_words WHERE term = ? OR reading = ? LIMIT 1", (term, term))
+        if not r: return None
         comps = json.loads(r[4]) if r[4] else []
         comp_reads = json.loads(r[5]) if r[5] else []
-        return CompoundWordEntry(
-            id=r[0], term=r[1], reading=r[2], compound_type=r[3],
-            components=comps, components_reading=comp_reads,
-            transitivity=r[6], meaning=r[7], structure=r[8]
-        )
+        return CompoundWordEntry(id=r[0], term=r[1], reading=r[2], compound_type=r[3], components=comps, components_reading=comp_reads, transitivity=r[6], meaning=r[7], structure=r[8])
 
     def match_tokens(self, tokens: List[TokenModel]) -> Tuple[List[DictionaryEntry], List[TokenModel]]:
         matched, oov_tokens, seen_matched = [], [], set()
@@ -183,18 +140,50 @@ class KnowledgeService:
         matcher_cls = importlib.import_module(".hierarchical-matcher", package="src").HierarchicalKnowledgeMatcher
         return matcher_cls(self).match(tokens, sentence_text)
 
-    def register_enriched_oov(self, entry: DictionaryEntry):
+    def register_enriched_oov(self, entry: DictionaryEntry, new_status: str = "ADAPTED", original_term: Optional[str] = None):
         self.in_memory_cache[entry.term] = entry
         if entry.term in self.exclude_terms:
             self.exclude_terms.remove(entry.term)
         conn = self._get_connection()
-        if conn:
-            try:
-                cur = conn.cursor()
-                cur.execute("""
-                    INSERT OR REPLACE INTO dictionary (term, reading, pos, definition_tags, rules, score, meaning, sequence, term_tags)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (entry.term, entry.reading, entry.pos, entry.definition_tags, entry.rules, entry.score, entry.meaning, entry.sequence, entry.term_tags))
-                conn.commit()
-            finally:
-                conn.close()
+        if not conn:
+            return
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='staging_entries'")
+            if cur.fetchone():
+                cur.execute("INSERT OR REPLACE INTO staging_entries (term, reading, pos, meaning_vi, gloss_en) VALUES (?, ?, ?, ?, ?)",
+                            (entry.term, entry.reading, entry.pos, entry.meaning, entry.meaning))
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='dictionary'")
+            if cur.fetchone():
+                cur.execute("INSERT OR REPLACE INTO dictionary (term, reading, pos, definition_tags, rules, score, meaning, sequence, term_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (entry.term, entry.reading, entry.pos, entry.definition_tags, entry.rules, entry.score, entry.meaning, entry.sequence, entry.term_tags))
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='oov_candidates'")
+            if cur.fetchone():
+                target = original_term or entry.term
+                cur.execute("UPDATE oov_candidates SET status = ?, updated_at = datetime('now') WHERE (term = ? OR term = ?) AND status = 'PENDING_CURATOR_REVIEW'",
+                            (new_status, target, entry.term))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def is_rejected_oov(self, term: str) -> bool:
+        if not term: return False
+        return self._query_one("SELECT 1 FROM oov_candidates WHERE term = ? AND status = 'REJECTED' LIMIT 1", (term,)) is not None
+
+    def update_oov_status(self, term: str, new_status: str, candidate_id: Optional[str] = None) -> bool:
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='oov_candidates'")
+            if not cur.fetchone():
+                return False
+            if candidate_id:
+                cur.execute("UPDATE oov_candidates SET status = ?, updated_at = datetime('now') WHERE oov_candidate_id = ? OR term = ?", (new_status, candidate_id, term))
+            else:
+                cur.execute("UPDATE oov_candidates SET status = ?, updated_at = datetime('now') WHERE term = ?", (new_status, term))
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()

@@ -115,6 +115,8 @@ class HierarchicalKnowledgeMatcher:
                     word_info=w_entry.to_dict()
                 ))
                 consumed.add(i)
+            elif self.ks.is_rejected_oov(tok.surface) or self.ks.is_rejected_oov(tok.lemma):
+                consumed.add(i)
             else:
                 oov_tokens.append(tok)
 

@@ -36,6 +36,10 @@ app.add_middleware(
 _pipeline_router = importlib.import_module(".pipeline-router", package="src").router
 app.include_router(_pipeline_router)
 
+# Dictionary & Internal Sync Router
+_dictionary_router = importlib.import_module(".dictionary-router", package="src").router
+app.include_router(_dictionary_router)
+
 
 @app.get("/health", include_in_schema=False)
 def health_check() -> Dict[str, Any]:

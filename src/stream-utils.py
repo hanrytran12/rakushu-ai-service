@@ -101,3 +101,56 @@ def log_sentence_breakdown(
             logger.info(f"      ★ {o.term}{pos_str} -> {o.suggested_meaning} [Độ tin cậy: {score}%]")
     else:
         logger.info("    [Từ Mới Ngoài Từ Điển (OOV)]: Không có (100% từ đã có sẵn trong từ điển)")
+
+
+def push_oovs_to_backend(oovs: List[Any], logger: Any = None) -> int:
+    """Sends discovered novel OOV candidates to Backend API for Curator review."""
+    if not oovs:
+        return 0
+    import os
+    import json
+    import urllib.request
+
+    backend_url = os.environ.get("BACKEND_API_URL", "http://localhost:5000")
+    ingest_url = f"{backend_url.rstrip('/')}/api/curator/oov/ingest"
+
+    unique_oovs = {}
+    for o in oovs:
+        term = getattr(o, "term", "")
+        if term and term not in unique_oovs:
+            unique_oovs[term] = {
+                "term": term,
+                "confidenceScore": float(getattr(o, "confidence_score", 0.85) or 0.85),
+                "tentativeReading": getattr(o, "tentative_reading", None) or term,
+                "tentativePos": getattr(o, "suggested_pos", None) or "NOUN",
+                "suggestedMeaning": getattr(o, "suggested_meaning", None) or "",
+                "contextSnippet": getattr(o, "context_snippet", None) or ""
+            }
+
+    payload = list(unique_oovs.values())
+    if not payload:
+        return 0
+
+    raw_urls = [os.environ.get("BACKEND_API_URL"), "http://localhost:5221", "http://localhost:5000"]
+    urls = [u.rstrip("/") for u in raw_urls if u]
+    data_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    for base_url in dict.fromkeys(urls):
+        ingest_url = f"{base_url}/api/curator/oov/ingest"
+        try:
+            req = urllib.request.Request(
+                ingest_url,
+                data=data_bytes,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if logger:
+                    logger.info(f"[OOV Ingest] Successfully pushed {len(payload)} OOV candidate(s) to Backend API at {base_url} ({resp.status}).")
+                return len(payload)
+        except Exception:
+            continue
+
+    if logger:
+        logger.warning("[OOV Ingest Warning] Could not connect to Backend API. Please make sure Rakushu.Api is running on http://localhost:5221 or http://localhost:5000.")
+    return 0
+

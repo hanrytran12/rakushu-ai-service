@@ -31,7 +31,7 @@ class LlmEnrichmentService:
                 {"role": "system", "content": sys_content},
                 {"role": "user", "content": prompt}
             ],
-            "think": False, "stream": False, "format": "json", "options": {"temperature": 0.2}
+            "think": False, "stream": False, "format": "json", "options": {"temperature": 0.3, "repeat_penalty": 1.15, "top_p": 0.9}
         }
 
         for attempt in range(1, self.max_retries + 1):
@@ -149,10 +149,11 @@ Yêu cầu dịch câu tiếng Nhật trên sang tiếng Việt và trả về J
             item = item_map.get(tok.surface, {})
             meaning = item.get("suggested_meaning") or f"thuật ngữ: {tok.surface}"
             pos = item.get("pos") or tok.pos or "NOUN"
-            score = float(item.get("confidence_score") or 0.85)
+            reading = item.get("reading") or tok.reading or tok.surface
+            score = float(item.get("confidence_score") or item.get("score") or 0.85)
             cands.append(OovCandidate(
-                token_id=tok.token_id, term=tok.surface, suggested_meaning=meaning,
-                suggested_pos=pos, context_snippet=text, confidence_score=score,
-                status="PENDING_CURATOR_REVIEW"
+                token_id=tok.token_id, term=tok.surface, tentative_reading=reading,
+                suggested_meaning=meaning, suggested_pos=pos, context_snippet=text,
+                confidence_score=score, status="PENDING_CURATOR_REVIEW"
             ))
         return cands

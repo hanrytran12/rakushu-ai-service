@@ -14,7 +14,7 @@ if sys.stdout.encoding != "utf-8":
 from src import (
     SubtitleSegment, SentenceSubtitle, PipelineResult, DictionaryEntry, AsrService,
     NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
-    InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
+    OovService, InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -98,6 +98,7 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     # Initialize Services
     nlp_svc, knowledge_svc = NlpService(), KnowledgeService()
     llm_svc, bunsetsu_svc = LlmEnrichmentService(), BunsetsuService()
+    oov_svc = OovService(knowledge_service=knowledge_svc)
 
     if not full_segment.text.strip():
         logger.warning("   [ASR Notice] No speech detected in media. Returning empty result.")
@@ -156,6 +157,8 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
             full_translation=full_translation, tokens=tokens,
             matched_knowledge=matched_k, oov_tokens=oov_toks
         )
+        for o in enriched_oovs:
+            oov_svc.persist_candidate(o)
         sent_seg.translation = s_trans_vi
         logger.info(f"   [Sentence Translation (VI)]: \"{s_trans_vi}\"")
 
@@ -193,7 +196,4 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
 if __name__ == "__main__":
     media_file = sys.argv[1] if len(sys.argv) > 1 else "samples/japanese_podcast_10s.mp4"
-    if not YouTubeService().is_youtube_url(media_file) and not os.path.exists(media_file):
-        import importlib
-        importlib.import_module("samples.create-sample-media").create_sample_media(media_file)
     run_pipeline(media_file)
