@@ -11,14 +11,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src import (
     SubtitleSegment, DictionaryEntry, AsrService,
     NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
-    InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
+    OovService, InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
 )
 
 _stream_utils = importlib.import_module(".stream-utils", package="src")
-format_sse = _stream_utils.format_sse
-execute_with_heartbeat = _stream_utils.execute_with_heartbeat
-build_sentence_payload = _stream_utils.build_sentence_payload
-log_sentence_breakdown = _stream_utils.log_sentence_breakdown
+format_sse, execute_with_heartbeat = _stream_utils.format_sse, _stream_utils.execute_with_heartbeat
+build_sentence_payload, log_sentence_breakdown = _stream_utils.build_sentence_payload, _stream_utils.log_sentence_breakdown
+push_oovs_to_backend = _stream_utils.push_oovs_to_backend
 
 logger = logging.getLogger("PipelineStreamer")
 
@@ -105,7 +104,7 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
         # Step 3: Sentence Segmentation
         t0_seg = time.time()
         nlp_svc, knowledge_svc = NlpService(), KnowledgeService()
-        bunsetsu_svc = BunsetsuService()
+        oov_svc, bunsetsu_svc = OovService(knowledge_service=knowledge_svc), BunsetsuService()
         try:
             sentence_texts = nlp_svc.split_sentences(full_segment.text)
         except Exception as exc:
@@ -156,6 +155,8 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
                     if u.unit_type == "GRAMMAR": total_grammar += 1
                     elif u.unit_type == "PHRASE": total_phrases += 1
                     elif u.unit_type == "COMPOUND_WORD": total_compounds += 1
+                for o in enriched_oovs:
+                    oov_svc.persist_candidate(o)
                 all_oovs.extend(enriched_oovs)
 
                 t_sent = round(time.time() - t0_sent, 2)
@@ -180,6 +181,8 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
             f" - Step 4 (Sentence Enrich):   {t_sentences}s (avg: {avg_sent}s/câu)\n"
             f" >>> TOTAL TIME ELAPSED:       {total_time}s\n{'='*75}\n"
         )
+        if all_oovs:
+            push_oovs_to_backend(all_oovs, logger)
         summary_payload = {
             "video_id": full_segment.video_id, "video_title": full_segment.video_title,
             "duration": duration, "total_processing_time": total_time,

@@ -30,6 +30,7 @@ tmp/
 data/cache/
 data/*.db
 data/*.sqlite
+data/*.json
 
 # IDE / Editor / OS files
 .vscode/
@@ -39,3 +40,10 @@ data/*.sqlite
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# BasedKit & AI agent tooling files, skills, and plans
+.agents/
+.claude/
+.codex/
+AGENTS.md
+plans/

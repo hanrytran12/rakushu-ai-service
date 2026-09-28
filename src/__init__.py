@@ -37,6 +37,14 @@ MediaInspector = _inspector.MediaInspector
 InvalidMediaError = _inspector.InvalidMediaError
 InvalidLanguageError = _inspector.InvalidLanguageError
 ProhibitedContentError = _inspector.ProhibitedContentError
+# Curator & OOV Models & Services
+_curator_models = importlib.import_module(".curator-models", package=__name__)
+CuratorReview = _curator_models.CuratorReview
+OovStatus = _curator_models.OovStatus
+CuratorDecision = _curator_models.CuratorDecision
+OovService = importlib.import_module(".oov-service", package=__name__).OovService
+LlmOovValidator = importlib.import_module(".llm-oov-validator", package=__name__).LlmOovValidator
+
 __all__ = [
     "SubtitleSegment",
     "TokenModel",
@@ -44,6 +52,9 @@ __all__ = [
     "DefinitionTag",
     "InflectionRule",
     "OovCandidate",
+    "CuratorReview",
+    "OovStatus",
+    "CuratorDecision",
     "BunsetsuPhrase",
     "SentenceSubtitle",
     "PipelineResult",
@@ -65,5 +76,7 @@ __all__ = [
     "CompoundWordEntry",
     "MatchedKnowledgeUnit",
     "HierarchicalKnowledgeMatcher",
+    "OovService",
+    "LlmOovValidator",
 ]
 
