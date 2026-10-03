@@ -137,7 +137,7 @@ class SentenceSubtitle:
 @dataclass
 class PipelineResult:
     segment: SubtitleSegment
-    full_translation: str = ""
+
     tokens: List[TokenModel] = field(default_factory=list)
     matched_knowledge: List[DictionaryEntry] = field(default_factory=list)
     knowledge_units: List[Any] = field(default_factory=list)
@@ -148,7 +148,7 @@ class PipelineResult:
     def to_dict(self):
         return {
             "segment": self.segment.to_dict(),
-            "full_translation": self.full_translation,
+
             "tokens": [t.to_dict() for t in self.tokens],
             "matched_knowledge": [k.to_dict() for k in self.matched_knowledge],
             "knowledge_units": [u.to_dict() if hasattr(u, "to_dict") else u for u in self.knowledge_units],

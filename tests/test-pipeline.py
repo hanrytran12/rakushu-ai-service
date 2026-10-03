@@ -7,16 +7,9 @@ import importlib
 # Ensure src package is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import (
-    SubtitleSegment,
-    SentenceSubtitle,
-    OovCandidate,
-    NlpService,
-    KnowledgeService,
-    LlmEnrichmentService,
-    BunsetsuService,
-)
-runner_mod = importlib.import_module("src.pipeline-runner")
+from src.models import SubtitleSegment, SentenceSubtitle, OovCandidate
+from src.services import NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService
+runner_mod = importlib.import_module("src.pipeline.pipeline-runner")
 run_pipeline = runner_mod.run_pipeline
 
 
@@ -77,15 +70,10 @@ class TestRakushuPipeline(unittest.TestCase):
         self.assertIn("若者言葉", oov_surfaces)
 
     def test_04_sentence_level_translation(self):
-        """Validates two-stage translation: full context + sentence & token meanings."""
+        """Validates sentence translation with local context and token meanings."""
         llm_svc = LlmEnrichmentService()
         nlp_svc = NlpService()
         knowledge_svc = KnowledgeService()
-
-        # Stage 1: Full transcription translation
-        full_trans = llm_svc.translate_full_transcription(self.sample_text)
-        self.assertTrue(len(full_trans) > 0)
-        self.assertIn("chào", full_trans.lower())
 
         # Stage 2: Sentence 1 with context
         s1 = SubtitleSegment(text="皆さん、こんにちは。")
@@ -93,8 +81,7 @@ class TestRakushuPipeline(unittest.TestCase):
         mk1, oov1 = knowledge_svc.match_tokens(toks1)
         trans1, t_meanings1, cands1 = llm_svc.translate_sentence_with_context(
             sentence_text=s1.text,
-            full_text=self.sample_text,
-            full_translation=full_trans,
+            context_text=self.sample_text,
             tokens=toks1,
             matched_knowledge=mk1,
             oov_tokens=oov1
@@ -108,8 +95,7 @@ class TestRakushuPipeline(unittest.TestCase):
         mk2, oov2 = knowledge_svc.match_tokens(toks2)
         trans2, t_meanings2, cands2 = llm_svc.translate_sentence_with_context(
             sentence_text=s2.text,
-            full_text=self.sample_text,
-            full_translation=full_trans,
+            context_text=self.sample_text,
             tokens=toks2,
             matched_knowledge=mk2,
             oov_tokens=oov2
@@ -119,7 +105,136 @@ class TestRakushuPipeline(unittest.TestCase):
         self.assertIn("ポッドキャスト", t_meanings2)
         self.assertIn("若者言葉", t_meanings2)
 
-    def test_05_bunsetsu_grouping(self):
+    def test_05_local_context_builder(self):
+        """Validates bounded local context and context-dependent expansion."""
+        llm_svc = LlmEnrichmentService()
+        sentences = ["一文目です。", "二文目です。", "三文目です。", "四文目です。", "五文目です。"]
+
+        context = llm_svc.build_sentence_context(sentences, 3, before=3, after=2)
+        self.assertIn("[CONTEXT 1] 一文目です。", context)
+        self.assertIn("[CONTEXT 3] 三文目です。", context)
+        self.assertIn("[TARGET 4] 四文目です。", context)
+        self.assertIn("[CONTEXT 5] 五文目です。", context)
+
+
+    def test_06_translation_chunk_planner_keeps_sentence_boundaries(self):
+        """Plans bounded chunks without splitting individual sentences."""
+        llm_svc = LlmEnrichmentService()
+        sentences = ["A" * 700, "B" * 700, "C" * 700, "D" * 100]
+        chunks = llm_svc.build_translation_chunks(sentences, max_chars=1400)
+        self.assertEqual(chunks, [(0, 2), (2, 4)])
+
+    def test_06b_translation_chunk_planner_limits_sentence_count(self):
+        """Planner must cap sentence count even when character budget is not reached."""
+        llm_svc = LlmEnrichmentService()
+        sentences = [f"Câu {i}。" for i in range(25)]
+        chunks = llm_svc.build_translation_chunks(sentences, max_chars=900)
+        self.assertEqual(chunks, [(0, 12), (12, 24), (24, 25)])
+
+    def test_07_adaptive_retry_changes_llm_options(self):
+        """A failed inference retry must not resend the exact same decoding config."""
+        from unittest.mock import patch
+        class FakeResponse:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+                self.text = body if isinstance(body, str) else str(body)
+
+            def json(self):
+                return self._body
+
+        calls = []
+        responses = [
+            FakeResponse(500, {"error": "prediction aborted, token repeat limit reached"}),
+            FakeResponse(200, {"message": {"content": '{"translation_vi":"dịch"}'}}),
+        ]
+
+        def fake_post(url, json, timeout):
+            calls.append(json["options"])
+            return responses.pop(0)
+
+        llm_svc = LlmEnrichmentService()
+        with patch("requests.post", side_effect=fake_post):
+            result = llm_svc._call_llm("dịch câu này")
+
+        self.assertEqual(result["translation_vi"], "dịch")
+        self.assertEqual(len(calls), 2)
+        self.assertNotEqual(calls[0], calls[1])
+        self.assertGreater(calls[1]["repeat_penalty"], calls[0]["repeat_penalty"])
+
+    def test_08_chunk_translation_validates_sentence_numbers(self):
+        """Chunk translation returns valid items and leaves missing sentences for fallback."""
+        llm_svc = LlmEnrichmentService()
+        llm_svc._call_llm = lambda prompt, system_prompt=None, max_attempts=None: {
+            "sentences": [
+                {"sentence_number": 1, "translation_vi": "dịch 1", "token_meanings": {}, "oov_learning": []},
+                {"sentence_number": 3, "translation_vi": "dịch 3", "token_meanings": {}, "oov_learning": []},
+            ]
+        }
+        result = llm_svc.translate_chunk([
+            {"sentence_number": 1, "text": "一。"},
+            {"sentence_number": 2, "text": "二。"},
+            {"sentence_number": 3, "text": "三。"},
+        ])
+        self.assertEqual(sorted(result), [1, 3])
+        self.assertEqual(result[1]["translation_vi"], "dịch 1")
+
+    def test_09_adaptive_chunk_splits_after_partial_batch(self):
+        """A persistently partial batch is split instead of retrying the same large prompt."""
+        llm_svc = LlmEnrichmentService()
+        calls = []
+
+        def fake_call(prompt, system_prompt=None, max_attempts=None):
+            import json
+            calls.append((prompt, max_attempts))
+            payload = json.loads(prompt.split("INPUT:\n", 1)[1].split("\n\nTrả về JSON", 1)[0])
+            items = payload
+            if len(items) > 2:
+                return {
+                    "sentences": [
+                        {"sentence_number": items[0]["sentence_number"], "translation_vi": "dịch"}
+                    ]
+                }
+            return {
+                "sentences": [
+                    {"sentence_number": item["sentence_number"], "translation_vi": "dịch"}
+                    for item in items
+                ]
+            }
+
+        llm_svc._call_llm = fake_call
+        result = llm_svc.translate_chunk([
+            {"sentence_number": 1, "text": "一。"},
+            {"sentence_number": 2, "text": "二。"},
+            {"sentence_number": 3, "text": "三。"},
+            {"sentence_number": 4, "text": "四。"},
+        ])
+
+        self.assertEqual(sorted(result), [1, 2, 3, 4])
+        self.assertTrue(any(len(prompt) > 0 and max_attempts == 2 for prompt, max_attempts in calls))
+        self.assertGreater(len(calls), 2)
+
+    def test_10_context_fallback_uses_expanded_window(self):
+        """Retries with expanded context only when the first context is insufficient."""
+        llm_svc = LlmEnrichmentService()
+        prompts = []
+        responses = iter([
+            {"context_sufficient": False, "context_issue": "referent unclear"},
+            {"translation_vi": "dịch", "token_meanings": {}, "oov_learning": [], "context_sufficient": True},
+        ])
+        def fake_call(prompt, system_prompt=None, max_attempts=None):
+            prompts.append(prompt)
+            return next(responses)
+        llm_svc._call_llm = fake_call
+        llm_svc.translate_sentence_with_context(
+            sentence_text="Câu 5.",
+            context_text="Câu 2.\nCâu 3.\nCâu 4.\nCâu 5.",
+            expanded_context_text="Câu 1.\nCâu 2.\nCâu 3.\nCâu 4.\nCâu 5.\nCâu 6.",
+        )
+        self.assertEqual(len(prompts), 2)
+        self.assertIn("Câu 1.", prompts[1])
+        self.assertIn("Câu 6.", prompts[1])
+    def test_11_bunsetsu_grouping(self):
         """Validates Bunsetsu phrase segmentation rules (Jiritsugo + Fuzokugo)."""
         nlp_svc = NlpService()
         tokens = nlp_svc.tokenize(self.segment)
@@ -140,7 +255,24 @@ class TestRakushuPipeline(unittest.TestCase):
             self.assertTrue(len(phrase.translation) > 0)
             self.assertLess(phrase.start_time, phrase.end_time)
 
-    def test_06_end_to_end_pipeline(self):
+    def test_12_sentence_translation_uses_local_context(self):
+        """Ensures Stage 2 receives nearby context instead of the transcript prefix."""
+        llm_svc = LlmEnrichmentService()
+        captured = {}
+        llm_svc._call_llm = lambda prompt, system_prompt=None: (captured.update(prompt=prompt) or {
+            "translation_vi": "dịch",
+            "token_meanings": {},
+            "oov_learning": [],
+        })
+        sentences = [f"Câu {i} về chủ đề riêng." for i in range(1, 8)]
+        target = sentences[6]
+        context = llm_svc.build_sentence_context(sentences, 6, before=3, after=2)
+        llm_svc.translate_sentence_with_context(sentence_text=target, context_text=context)
+        self.assertIn("Câu 4 về chủ đề riêng.", captured["prompt"])
+        self.assertIn("Câu 7 về chủ đề riêng.", captured["prompt"])
+        self.assertNotIn("Câu 1 về chủ đề riêng.", captured["prompt"])
+        self.assertIn("Câu cần dịch", captured["prompt"])
+    def test_13_end_to_end_pipeline(self):
         """Runs full end-to-end pipeline and checks sentence-level result objects."""
         media_file = "samples/japanese_podcast_10s.mp4"
         if not os.path.exists(media_file):
@@ -150,7 +282,6 @@ class TestRakushuPipeline(unittest.TestCase):
         result = run_pipeline(media_file)
 
         self.assertIsNotNone(result.segment)
-        self.assertTrue(len(result.full_translation) > 0)
         self.assertEqual(len(result.sentences), 2)
         self.assertEqual(len(result.bunsetsu_phrases), 8)
         self.assertGreaterEqual(len(result.oov_candidates), 2)
@@ -175,11 +306,10 @@ class TestRakushuPipeline(unittest.TestCase):
 
         # Validate exportable dictionary format
         result_dict = result.to_dict()
-        self.assertIn("full_translation", result_dict)
+        self.assertNotIn("full_translation", result_dict)
         self.assertIn("sentences", result_dict)
         self.assertEqual(len(result_dict["sentences"]), 2)
 
 
 if __name__ == "__main__":
     unittest.main()
-

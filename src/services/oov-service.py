@@ -5,12 +5,15 @@ import datetime
 import logging
 import importlib
 from typing import List, Optional, Tuple, Dict, Any
-from src import (
+from src.models import (
     OovCandidate, CuratorReview, OovStatus, CuratorDecision,
-    DictionaryEntry, KnowledgeService
+    DictionaryEntry,
 )
 
-_init_oov_tables = importlib.import_module(".oov-schema", package="src").init_oov_tables
+_knowledge_mod = importlib.import_module(".knowledge-service", package="src.services")
+KnowledgeService = _knowledge_mod.KnowledgeService
+
+_init_oov_tables = importlib.import_module(".oov-schema", package="src.models").init_oov_tables
 logger = logging.getLogger("OovService")
 
 

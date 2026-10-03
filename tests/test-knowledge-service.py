@@ -8,7 +8,8 @@ import sqlite3
 # Adjust search path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import KnowledgeService, TokenModel, DictionaryEntry
+from src.services import KnowledgeService
+from src.models import TokenModel, DictionaryEntry
 
 
 class TestKnowledgeService(unittest.TestCase):

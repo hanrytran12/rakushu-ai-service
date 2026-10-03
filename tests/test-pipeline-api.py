@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-api_server = importlib.import_module("src.api-server")
+api_server = importlib.import_module("src.api.api-server")
 app = api_server.app
 
 
@@ -17,7 +17,11 @@ class TestPipelineApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = TestClient(app)
-        cls.sample_media = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "samples", "japanese_podcast_10s.mp4"))
+        cls.sample_media = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "samples", "japanese_podcast_10s.mp4"
+            )
+        )
 
     def test_01_health_endpoints(self):
         """Verifies root and pipeline health check endpoints."""
@@ -43,34 +47,19 @@ class TestPipelineApi(unittest.TestCase):
         self.assertIn("Unsupported file format", res.json()["detail"])
 
     def test_04_process_media_path(self):
-        """Verifies full end-to-end processing via process-url endpoint with sample media."""
+        """Verifies full end-to-end processing via the SSE pipeline endpoint."""
         if not os.path.exists(self.sample_media):
             raise unittest.SkipTest(f"Sample media not found: {self.sample_media}")
 
         payload = {"url": self.sample_media}
         res = self.client.post("/api/v1/pipeline/process-url", json=payload)
+
         self.assertEqual(res.status_code, 200)
-        data = res.json()
-        self.assertTrue(data["success"])
-        pipe_data = data["data"]
-        self.assertTrue(len(pipe_data["global_transcript"]) > 0)
-        self.assertTrue(len(pipe_data["global_translation"]) > 0)
-        self.assertTrue(len(pipe_data["sentences"]) > 0)
-
-        # Check first sentence structure
-        first_sent = pipe_data["sentences"][0]
-        self.assertIn("text", first_sent)
-        self.assertIn("translation", first_sent)
-        self.assertIn("bunsetsu_phrases", first_sent)
-        self.assertIn("tokens", first_sent)
-        self.assertIn("knowledge_units", first_sent)
-        self.assertTrue(len(first_sent["tokens"]) > 0)
-        self.assertTrue(len(first_sent["bunsetsu_phrases"]) > 0)
-
-        # Check summary structure
-        summary = pipe_data["summary"]
-        self.assertGreater(summary["total_sentences"], 0)
-        self.assertGreater(summary["total_tokens"], 0)
+        self.assertIn("text/event-stream", res.headers["content-type"])
+        self.assertIn("event: sentence_processed", res.text)
+        self.assertIn("event: chunk_completed", res.text)
+        self.assertIn("event: pipeline_completed", res.text)
+        self.assertIn('"translation"', res.text)
 
     def test_05_upload_valid_video_file(self):
         """Verifies multipart file upload processing and temp file cleanup."""
@@ -82,10 +71,11 @@ class TestPipelineApi(unittest.TestCase):
             res = self.client.post("/api/v1/pipeline/upload-video", files=files)
 
         self.assertEqual(res.status_code, 200)
-        data = res.json()
-        self.assertTrue(data["success"])
-        self.assertIn("sentences", data["data"])
-        self.assertGreater(len(data["data"]["sentences"]), 0)
+        self.assertIn("text/event-stream", res.headers["content-type"])
+        self.assertIn("event: sentence_processed", res.text)
+        self.assertIn("event: chunk_completed", res.text)
+        self.assertIn("event: pipeline_completed", res.text)
+        self.assertIn('"translation"', res.text)
 
 
 if __name__ == "__main__":

@@ -6,15 +6,17 @@ import logging
 import importlib
 from typing import Generator
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.utils import create_pipeline_log, close_pipeline_log
 
-from src import (
-    SubtitleSegment, DictionaryEntry, AsrService,
-    NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
-    OovService, InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+from src.models import SubtitleSegment, DictionaryEntry, MediaSourceType
+from src.services import (
+    AsrService, NlpService, KnowledgeService, LlmEnrichmentService,
+    BunsetsuService, YouTubeService, OovService,
+    InvalidMediaError, InvalidLanguageError, ProhibitedContentError,
 )
-
-_stream_utils = importlib.import_module(".stream-utils", package="src")
+_stream_utils = importlib.import_module(".stream-utils", package="src.utils")
 format_sse, execute_with_heartbeat = _stream_utils.format_sse, _stream_utils.execute_with_heartbeat
 build_sentence_payload, log_sentence_breakdown = _stream_utils.build_sentence_payload, _stream_utils.log_sentence_breakdown
 push_oovs_to_backend = _stream_utils.push_oovs_to_backend
@@ -25,7 +27,9 @@ logger = logging.getLogger("PipelineStreamer")
 def stream_pipeline(media_path: str) -> Generator[str, None, None]:
     """Processes media and yields SSE events progressively at each stage and sentence."""
     t_start = time.time()
-    t_yt, t_asr, t_trans, t_seg, t_sentences = 0.0, 0.0, 0.0, 0.0, 0.0
+    t_yt, t_asr, t_seg, t_sentences = 0.0, 0.0, 0.0, 0.0
+    log_path, log_handler = create_pipeline_log("stream_pipeline")
+    logger.info(f"[RUN LOG] Full pipeline log: {os.path.abspath(log_path)}")
     logger.info(f"\n{'='*75}\n[STREAM PIPELINE] Starting for media: '{media_path}'\n{'='*75}")
     yield format_sse("pipeline_started", {"media_path": media_path, "timestamp": time.time()})
 
@@ -84,22 +88,7 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
             yield format_sse("pipeline_completed", {"message": "No speech detected", "total_sentences": 0})
             return
 
-        # Step 2: Global Translation
-        t0_trans = time.time()
-        logger.info(">>> [Step 2: Global Translation] Translating full transcription via LLM...")
-        yield format_sse("progress", {"step": "global_translation", "message": "Generating global translation..."})
         llm_svc = LlmEnrichmentService()
-        try:
-            full_translation = yield from execute_with_heartbeat(
-                llm_svc.translate_full_transcription, full_segment.text
-            )
-        except Exception as exc:
-            logger.warning(f"    [Step 2 Warning] Global translation error: {exc}")
-            full_translation = ""
-        full_segment.translation = full_translation
-        t_trans = round(time.time() - t0_trans, 2)
-        logger.info(f"    [Step 2 Done] Global VI completed in {t_trans}s | VI: \"{full_translation}\"")
-        yield format_sse("global_translation_completed", {"translation": full_translation})
 
         # Step 3: Sentence Segmentation
         t0_seg = time.time()
@@ -120,9 +109,62 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
         curr_char = 0
         total_grammar, total_phrases, total_compounds = 0, 0, 0
         all_oovs = []
+        translation_failures = []
+        chunk_ranges = llm_svc.build_translation_chunks(sentence_texts)
+        chunk_map = {}
+        for chunk_no, (chunk_start, chunk_end) in enumerate(chunk_ranges, start=1):
+            for sentence_index in range(chunk_start, chunk_end):
+                chunk_map[sentence_index] = chunk_no
+        logger.info(f"    [Step 4 Planner] Created {len(chunk_ranges)} LLM translation chunks.")
+
         t0_sentences = time.time()
+        chunk_results_by_sentence = {}
+        chunk_batch_meta = {}
+        for chunk_no, (chunk_start, chunk_end) in enumerate(chunk_ranges, start=1):
+            chunk_t0 = time.time()
+            chunk_input = []
+            for i in range(chunk_start, chunk_end):
+                chunk_input.append({
+                    "sentence_number": i + 1,
+                    "text": sentence_texts[i],
+                })
+            try:
+                chunk_results = yield from execute_with_heartbeat(
+                    llm_svc.translate_chunk, chunk_input
+                )
+            except Exception as exc:
+                logger.warning(f"    [Chunk #{chunk_no}] Batch translation error: {exc}")
+                chunk_results = {}
+            expected_count = chunk_end - chunk_start
+            returned_count = len(chunk_results)
+            elapsed = round(time.time() - chunk_t0, 2)
+            chunk_batch_meta[chunk_no] = {
+                "expected": expected_count, "returned": returned_count, "elapsed": elapsed,
+            }
+            if chunk_results:
+                chunk_results_by_sentence.update(chunk_results)
+                logger.info(
+                    f"    [Chunk #{chunk_no} Batch] {returned_count}/{expected_count} results in {elapsed}s."
+                )
+                for sentence_no in range(chunk_start + 1, chunk_end + 1):
+                    item = chunk_results.get(sentence_no)
+                    if item:
+                        logger.info(f"       [#{sentence_no}] JP: {sentence_texts[sentence_no - 1]}")
+                        logger.info(f"       [#{sentence_no}] VI: {str(item.get('translation_vi', '')).strip()}")
+                missing = [
+                    sentence_no for sentence_no in range(chunk_start + 1, chunk_end + 1)
+                    if sentence_no not in chunk_results
+                ]
+                if missing:
+                    logger.warning(f"       [Chunk #{chunk_no} Batch Missing] {missing}")
+            else:
+                logger.warning(
+                    f"    [Chunk #{chunk_no} Batch] FAILED after {elapsed}s; "
+                    f"sentence-level fallback will be used."
+                )
 
         # Step 4: Stream Sentences Progressively
+        chunk_sentence_outputs = {}
         for idx, sent_text in enumerate(sentence_texts, start=1):
             t0_sent = time.time()
             sent_len = len(sent_text)
@@ -136,16 +178,40 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
             )
 
             try:
+                chunk_no = chunk_map.get(idx - 1, 1)
+                logger.info(f"    [Chunk #{chunk_no}] Processing sentence #{idx}/{total_sentences}.")
                 tokens = nlp_svc.tokenize(sent_seg)
                 hier_units, oov_toks = knowledge_svc.match_hierarchical(tokens, sent_text)
                 matched_k = [DictionaryEntry(term=u.surface, reading=u.reading, pos=u.unit_type, meaning=u.meaning) for u in hier_units]
 
-                s_trans_vi, token_meanings, enriched_oovs = yield from execute_with_heartbeat(
-                    llm_svc.translate_sentence_with_context,
-                    sentence_text=sent_text, full_text=full_segment.text,
-                    full_translation=full_translation, tokens=tokens,
-                    matched_knowledge=matched_k, oov_tokens=oov_toks
-                )
+                chunk_item = chunk_results_by_sentence.get(idx)
+                if chunk_item:
+                    s_trans_vi = str(chunk_item.get("translation_vi", "")).strip()
+                    token_meanings = llm_svc._align_token_meanings(
+                        chunk_item.get("token_meanings", {}), tokens, matched_k
+                    )
+                    enriched_oovs = llm_svc._parse_oov_candidates(
+                        chunk_item.get("oov_learning", []), oov_toks, sent_text
+                    )
+                else:
+                    context_text = llm_svc.build_sentence_context(
+                        sentence_texts, idx - 1, before=3, after=2
+                    )
+                    expanded_context = llm_svc.build_sentence_context(
+                        sentence_texts, idx - 1, before=10, after=3
+                    )
+                    s_trans_vi, token_meanings, enriched_oovs = yield from execute_with_heartbeat(
+                        llm_svc.translate_sentence_with_context,
+                        sentence_text=sent_text, context_text=context_text,
+                        expanded_context_text=expanded_context,
+                        tokens=tokens, matched_knowledge=matched_k, oov_tokens=oov_toks
+                    )
+                    if llm_svc.last_sentence_translation_failed:
+                        translation_failures.append({
+                            "sentence_number": idx,
+                            "chunk_number": chunk_no,
+                            "text": sent_text,
+                        })
                 for tok in tokens:
                     if tok.surface in token_meanings:
                         tok.context_meaning = token_meanings[tok.surface]
@@ -168,31 +234,85 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
 
             yield format_sse("sentence_processed", payload)
 
+            chunk_sentence_outputs[idx] = payload.get("translation", "")
+            if idx in {end for _, end in chunk_ranges}:
+                chunk_no = chunk_map.get(idx - 1, 1)
+                chunk_start = next(start for start, end in chunk_ranges if end == idx)
+                chunk_failed = [
+                    f["sentence_number"] for f in translation_failures
+                    if chunk_start + 1 <= f["sentence_number"] <= idx
+                ]
+                batch_meta = chunk_batch_meta.get(chunk_no, {})
+                status = "PARTIAL" if chunk_failed else "SUCCESS"
+                logger.info(
+                    f"\n{'='*70}\n"
+                    f"[CHUNK #{chunk_no} COMPLETED] "
+                    f"Sentences #{chunk_start + 1}-#{idx} | Status: {status} | "
+                    f"Batch: {batch_meta.get('returned', 0)}/{batch_meta.get('expected', idx - chunk_start)} "
+                    f"in {batch_meta.get('elapsed', 0)}s\n"
+                    f"{'='*70}"
+                )
+                for sentence_no in range(chunk_start + 1, idx + 1):
+                    logger.info(f"  [#{sentence_no}] JP: {sentence_texts[sentence_no - 1]}")
+                    logger.info(f"  [#{sentence_no}] VI: {chunk_sentence_outputs.get(sentence_no, '')}")
+                if chunk_failed:
+                    logger.warning(f"  [Chunk #{chunk_no} Fallback Failed] {chunk_failed}")
+                logger.info(f"{'='*70}")
+                yield format_sse("chunk_completed", {
+                    "chunk_number": chunk_no,
+                    "start_sentence": chunk_start + 1,
+                    "end_sentence": idx,
+                    "status": status,
+                    "batch_expected": batch_meta.get("expected", idx - chunk_start),
+                    "batch_returned": batch_meta.get("returned", 0),
+                    "batch_elapsed": batch_meta.get("elapsed", 0),
+                    "fallback_failures": chunk_failed,
+                    "sentences": [
+                        {
+                            "sentence_number": sentence_no,
+                            "text": sentence_texts[sentence_no - 1],
+                            "translation": chunk_sentence_outputs.get(sentence_no, ""),
+                        }
+                        for sentence_no in range(chunk_start + 1, idx + 1)
+                    ],
+                })
+
         # Step 5: Final Summary
         t_sentences = round(time.time() - t0_sentences, 2)
         total_time = round(time.time() - t_start, 2)
         avg_sent = round(t_sentences / max(total_sentences, 1), 2)
+        if translation_failures:
+            logger.warning(
+                f"    [Step 4 Partial] Failed sentence translations: "
+                f"{[f['sentence_number'] for f in translation_failures]}"
+            )
+        logger.info(f"[RUN LOG] Full pipeline log saved at: {os.path.abspath(log_path)}")
         logger.info(
             f"\n{'='*75}\n[PIPELINE COMPLETED] Summary Timing Breakdown:\n"
             f" - Step 0 (YouTube Download):  {t_yt}s\n"
             f" - Step 1 (Whisper ASR):       {t_asr}s (Audio Duration: {duration}s)\n"
-            f" - Step 2 (Global Translation): {t_trans}s\n"
             f" - Step 3 (Segmentation):      {t_seg}s ({total_sentences} sentences)\n"
             f" - Step 4 (Sentence Enrich):   {t_sentences}s (avg: {avg_sent}s/câu)\n"
             f" >>> TOTAL TIME ELAPSED:       {total_time}s\n{'='*75}\n"
         )
         if all_oovs:
             push_oovs_to_backend(all_oovs, logger)
+        pipeline_status = "PARTIAL_SUCCESS" if translation_failures else "COMPLETED"
         summary_payload = {
             "video_id": full_segment.video_id, "video_title": full_segment.video_title,
             "duration": duration, "total_processing_time": total_time,
+            "status": pipeline_status,
             "summary": {
                 "total_sentences": total_sentences, "total_grammar_matched": total_grammar,
                 "total_phrases_matched": total_phrases, "total_compound_words_matched": total_compounds,
-                "total_oov_discovered": len(all_oovs)
+                "total_oov_discovered": len(all_oovs),
+                "translation_failures": translation_failures,
             }
         }
         yield format_sse("pipeline_completed", summary_payload)
     except Exception as fatal_exc:
         logger.error(f"Fatal streaming pipeline exception: {fatal_exc}", exc_info=True)
         yield format_sse("error", {"error_type": "PipelineFatalError", "message": str(fatal_exc)})
+    finally:
+        logger.info(f"[RUN LOG] Pipeline log finalized: {os.path.abspath(log_path)}")
+        close_pipeline_log(log_handler)

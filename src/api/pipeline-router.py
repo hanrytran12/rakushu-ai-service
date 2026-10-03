@@ -9,16 +9,16 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Request, status
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
-_models = importlib.import_module(".api-models", package="src")
+_models = importlib.import_module(".api-models", package="src.api")
 ProcessUrlRequest = _models.ProcessUrlRequest
 
-_pipeline_streamer = importlib.import_module(".pipeline-streamer", package="src")
+_pipeline_streamer = importlib.import_module(".pipeline-streamer", package="src.pipeline")
 stream_pipeline = _pipeline_streamer.stream_pipeline
 
 logger = logging.getLogger("PipelineRouter")
 router = APIRouter(prefix="/api/v1/pipeline", tags=["Video Pipeline"])
 
-TEMP_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "temp_uploads"))
+TEMP_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "temp_uploads"))
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4a", ".mp3", ".wav", ".mkv", ".webm"}
 
 
@@ -63,7 +63,7 @@ def pipeline_health() -> Dict[str, Any]:
 @router.post("/process-url", include_in_schema=False)
 @router.post("/process-url/stream", include_in_schema=False)
 def stream_video_url_endpoint(req: ProcessUrlRequest) -> StreamingResponse:
-    """Streams real-time SSE events (ASR -> Global Translation -> Sentence-by-sentence) from YouTube or media URL."""
+    """Streams real-time SSE events (ASR -> chunk translation -> sentence enrichment) from YouTube or media URL."""
     logger.info(f">>> [Stream Request] Received URL: '{req.url}'")
     return _stream_response(stream_pipeline(req.url))
 

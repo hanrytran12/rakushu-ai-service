@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 if sys.stdout.encoding != "utf-8":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -33,11 +33,11 @@ app.add_middleware(
 )
 
 # Video Processing Pipeline Router
-_pipeline_router = importlib.import_module(".pipeline-router", package="src").router
+_pipeline_router = importlib.import_module(".pipeline-router", package="src.api").router
 app.include_router(_pipeline_router)
 
 # Dictionary & Internal Sync Router
-_dictionary_router = importlib.import_module(".dictionary-router", package="src").router
+_dictionary_router = importlib.import_module(".dictionary-router", package="src.api").router
 app.include_router(_dictionary_router)
 
 
@@ -55,7 +55,7 @@ def health_check() -> Dict[str, Any]:
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def stream_demo_page() -> str:
     """Interactive Realtime SSE Stream Inspector UI."""
-    html_file = os.path.join(os.path.dirname(__file__), "demo-page.html")
+    html_file = os.path.join(os.path.dirname(__file__), "..", "demo-page.html")
     if os.path.exists(html_file):
         with open(html_file, "r", encoding="utf-8") as f:
             return f.read()
@@ -66,4 +66,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
     host = os.environ.get("HOST", "0.0.0.0")
-    uvicorn.run("src.api-server:app", host=host, port=port, reload=False)
+    uvicorn.run("src.api.api-server:app", host=host, port=port, reload=False)

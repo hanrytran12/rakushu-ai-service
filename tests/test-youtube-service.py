@@ -8,7 +8,8 @@ from unittest.mock import patch, MagicMock
 # Adjust search path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import YouTubeService, SubtitleSegment, PipelineResult
+from src.services import YouTubeService, AsrService, LlmEnrichmentService
+from src.models import SubtitleSegment, PipelineResult
 
 
 class TestYouTubeService(unittest.TestCase):
@@ -107,16 +108,16 @@ class TestYouTubeService(unittest.TestCase):
         self.assertEqual(meta["video_id"], "test_vid_01")
         self.assertTrue(os.path.exists(file_path))
         self.assertTrue(file_path.endswith(".mp4"))
-    @patch("src.YouTubeService.download_video")
-    @patch("src.AsrService.transcribe")
-    @patch("src.LlmEnrichmentService.translate_full_transcription")
-    @patch("src.LlmEnrichmentService.translate_sentence_with_context")
+    @patch.object(YouTubeService, "download_video")
+    @patch.object(AsrService, "transcribe")
+
+    @patch.object(LlmEnrichmentService, "translate_sentence_with_context")
     def test_06_pipeline_youtube_routing(
-        self, mock_s_trans, mock_f_trans, mock_asr, mock_yt_download
+        self, mock_s_trans, mock_asr, mock_yt_download
     ):
         """Tests that run_pipeline detects YouTube URL, downloads MP4, and populates video_path."""
         import importlib
-        runner_mod = importlib.import_module("src.pipeline-runner")
+        runner_mod = importlib.import_module("src.pipeline.pipeline-runner")
 
         sample_url = "https://www.youtube.com/watch?v=abcdefghijk"
         mock_yt_download.return_value = (
@@ -129,7 +130,6 @@ class TestYouTubeService(unittest.TestCase):
             start_time=0.0,
             end_time=5.0,
         )
-        mock_f_trans.return_value = "Xin chào mọi người."
         mock_s_trans.return_value = (
             "Xin chào mọi người.",
             {"皆さん": "mọi người", "こんにちは": "xin chào"},

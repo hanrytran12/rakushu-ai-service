@@ -1,6 +1,6 @@
 """Bunsetsu Grouping Service: Japanese phrase boundary segmentation and alignment."""
 from typing import List, Dict, Optional
-from src import TokenModel, BunsetsuPhrase, SubtitleSegment
+from src.models import TokenModel, BunsetsuPhrase, SubtitleSegment
 
 try:
     import spacy

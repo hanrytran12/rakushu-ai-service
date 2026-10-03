@@ -61,8 +61,8 @@
         <div class="space-y-2 text-xs">
           <div id="step-started" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 1. Khởi động kết nối</div>
           <div id="step-asr" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 2. Whisper ASR phiên âm</div>
-          <div id="step-global" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 3. Dịch ngữ cảnh toàn bài</div>
-          <div id="step-sentence" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 4. Làm giàu ngữ pháp & từ vựng</div>
+
+          <div id="step-sentence" class="flex items-center gap-2 text-slate-400"><div class="w-2 h-2 rounded-full bg-slate-300"></div> 3. Dịch, làm giàu ngữ pháp & từ vựng</div>
         </div>
         <div id="globalTranslationBox" class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 hidden">
           <p class="text-[11px] font-semibold text-indigo-700 uppercase mb-1">Dịch Tổng Quan:</p>
@@ -107,8 +107,8 @@
     const sentencesContainer = document.getElementById('sentencesContainer');
     const emptyPlaceholder = document.getElementById('emptyPlaceholder');
     const sentenceCountBadge = document.getElementById('sentenceCountBadge');
-    const globalTranslationBox = document.getElementById('globalTranslationBox');
-    const globalTranslationText = document.getElementById('globalTranslationText');
+
+
 
     tabUploadBtn.onclick = () => {
       activeTab = 'upload';
@@ -145,7 +145,7 @@
     startStreamBtn.onclick = async () => {
       sentencesContainer.innerHTML = '';
       emptyPlaceholder.classList.add('hidden');
-      globalTranslationBox.classList.add('hidden');
+
       sentenceCountBadge.classList.add('hidden');
       startStreamBtn.disabled = true;
       btnText.textContent = 'Đang xử lý stream...';
@@ -226,21 +226,15 @@
     function handleStreamEvent(type, data, onSent) {
       if (type === 'pipeline_started') {
         markStepActive('step-started');
-      } else if (type === 'progress') {
+      } else if (type === 'progress' && data.step === 'asr') {
         if (data.step === 'asr') {
           markStepDone('step-started');
           markStepActive('step-asr');
-        } else if (data.step === 'global_translation') {
+
           markStepDone('step-asr');
-          markStepActive('step-global');
         }
-      } else if (type === 'global_translation_completed') {
-        markStepDone('step-global');
-        markStepActive('step-sentence');
-        if (data.translation) {
-          globalTranslationText.textContent = data.translation;
-          globalTranslationBox.classList.remove('hidden');
-        }
+
+        markStepDone('step-sentence');
       } else if (type === 'sentence_processed') {
         onSent();
         renderSentenceCard(data);

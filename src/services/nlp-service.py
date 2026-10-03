@@ -1,6 +1,6 @@
 """NLP Service: Japanese morphological tokenizer and sentence segmenter using GiNZA."""
 from typing import List, Optional
-from src import TokenModel, SubtitleSegment
+from src.models import TokenModel, SubtitleSegment
 
 try:
     import spacy

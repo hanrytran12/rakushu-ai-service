@@ -76,7 +76,7 @@ class PipelineData(BaseModel):
     source_url: str
     duration: float
     global_transcript: str
-    global_translation: str
+
     sentences: List[SentenceItem] = []
     summary: PipelineSummary
 

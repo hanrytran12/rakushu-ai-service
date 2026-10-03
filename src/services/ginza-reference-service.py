@@ -7,7 +7,7 @@ from typing import Dict, Optional
 class GinzaReferenceService:
     """Provides linguistic lookups against local GiNZA reference SQLite database."""
 
-    DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "ginza_reference.db")
+    DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "ginza_reference.db")
 
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or os.path.abspath(self.DEFAULT_DB_PATH)
