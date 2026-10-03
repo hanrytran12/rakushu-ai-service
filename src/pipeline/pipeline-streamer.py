@@ -6,17 +6,17 @@ import logging
 import importlib
 from typing import Generator
 
-from src.logging_utils import create_pipeline_log, close_pipeline_log
+from src.utils import create_pipeline_log, close_pipeline_log
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src import (
-    SubtitleSegment, DictionaryEntry, AsrService,
-    NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
-    OovService, InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
+from src.models import SubtitleSegment, DictionaryEntry, MediaSourceType
+from src.services import (
+    AsrService, NlpService, KnowledgeService, LlmEnrichmentService,
+    BunsetsuService, YouTubeService, OovService,
+    InvalidMediaError, InvalidLanguageError, ProhibitedContentError,
 )
-
-_stream_utils = importlib.import_module(".stream-utils", package="src")
+_stream_utils = importlib.import_module(".stream-utils", package="src.utils")
 format_sse, execute_with_heartbeat = _stream_utils.format_sse, _stream_utils.execute_with_heartbeat
 build_sentence_payload, log_sentence_breakdown = _stream_utils.build_sentence_payload, _stream_utils.log_sentence_breakdown
 push_oovs_to_backend = _stream_utils.push_oovs_to_backend

@@ -26,3 +26,15 @@
 - `OOV_CANDIDATE`: routed to `CURATOR_REVIEW` for human-in-the-loop vocabulary enrichment.
 - `PHRASE`: interactive Bunsetsu units rendered directly on the Learner video subtitle canvas.
 
+## Source Code Structure
+
+```
+src/
+├── api/       # FastAPI transport and routers
+├── models/    # Domain/API-independent data contracts
+├── services/  # Domain and external-integration services
+├── pipeline/  # Pipeline orchestration and streaming
+└── utils/     # Shared infrastructure helpers
+```
+
+Dependency direction: API -> Pipeline -> Services -> Models. Pipeline/API may consume models directly. Models must not depend on API or service orchestration.

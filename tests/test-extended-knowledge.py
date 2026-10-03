@@ -5,7 +5,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import KnowledgeService, GrammarEntry, PhraseEntry, CompoundWordEntry
+from src.services import KnowledgeService
+from src.models import GrammarEntry, PhraseEntry, CompoundWordEntry
 
 
 class TestExtendedKnowledge(unittest.TestCase):

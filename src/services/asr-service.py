@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import importlib.util
 
-from src import SubtitleSegment
+from src.models import SubtitleSegment
 
 
 class AsrService:
@@ -47,7 +47,7 @@ class AsrService:
         custom_config: Optional[dict] = None
     ) -> SubtitleSegment:
         import importlib
-        _mod = importlib.import_module(".media-inspector", package="src")
+        _mod = importlib.import_module(".media-inspector", package="src.services")
         inspector = _mod.MediaInspector()
         ProhibitedContentError = _mod.ProhibitedContentError
         InvalidLanguageError = _mod.InvalidLanguageError

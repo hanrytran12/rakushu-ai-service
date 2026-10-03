@@ -5,7 +5,7 @@ import re
 import time
 import logging
 from typing import List, Dict, Any, Tuple, Optional
-from src import TokenModel, DictionaryEntry, OovCandidate
+from src.models import TokenModel, DictionaryEntry, OovCandidate
 
 logger = logging.getLogger("RakushuPipeline")
 

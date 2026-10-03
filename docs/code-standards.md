@@ -5,3 +5,14 @@
 3. **Core Principles**: YAGNI, KISS, DRY.
 4. **Data Contract**: Follow Logical ERD schemas (`SUBTITLE_SEGMENT`, `TOKEN`, `DICTIONARY_ENTRY`, `OOV_CANDIDATE`, `PHRASE`).
 5. **Quality Gate**: Comprehensive unit tests covering all NLP tokenization, OOV detection, and Bunsetsu grouping logic.
+
+## Source Structure
+
+Use responsibility-driven packages under `src/`:
+- `api/`: FastAPI transport, request/response schemas, routers.
+- `models/`: domain and persistence data contracts.
+- `services/`: ASR, NLP, knowledge, LLM, OOV, media, and external integrations.
+- `pipeline/`: orchestration, streaming, and pipeline result formatting.
+- `utils/`: reusable infrastructure helpers such as SSE and logging.
+
+New code should import from the owning package rather than the root `src` compatibility exports.

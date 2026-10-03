@@ -2,7 +2,7 @@
 import re
 import logging
 from typing import Optional, Dict, Any, Tuple
-from src import TokenModel, OovCandidate
+from src.models import TokenModel, OovCandidate
 
 logger = logging.getLogger("OovValidator")
 

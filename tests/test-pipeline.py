@@ -7,16 +7,9 @@ import importlib
 # Ensure src package is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import (
-    SubtitleSegment,
-    SentenceSubtitle,
-    OovCandidate,
-    NlpService,
-    KnowledgeService,
-    LlmEnrichmentService,
-    BunsetsuService,
-)
-runner_mod = importlib.import_module("src.pipeline-runner")
+from src.models import SubtitleSegment, SentenceSubtitle, OovCandidate
+from src.services import NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService
+runner_mod = importlib.import_module("src.pipeline.pipeline-runner")
 run_pipeline = runner_mod.run_pipeline
 
 

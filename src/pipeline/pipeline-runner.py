@@ -3,9 +3,9 @@ import sys
 import time
 import logging
 
-from src.logging_utils import create_pipeline_log, close_pipeline_log
+from src.utils import create_pipeline_log, close_pipeline_log
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 if sys.stdout.encoding != "utf-8":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -13,12 +13,12 @@ if sys.stdout.encoding != "utf-8":
     except Exception:
         pass
 
-from src import (
-    SubtitleSegment, SentenceSubtitle, PipelineResult, DictionaryEntry, AsrService,
-    NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService, YouTubeService,
-    OovService, InvalidMediaError, InvalidLanguageError, ProhibitedContentError, MediaSourceType
+from src.models import SubtitleSegment, SentenceSubtitle, PipelineResult, DictionaryEntry, MediaSourceType
+from src.services import (
+    AsrService, NlpService, KnowledgeService, LlmEnrichmentService,
+    BunsetsuService, YouTubeService, OovService,
+    InvalidMediaError, InvalidLanguageError, ProhibitedContentError,
 )
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RakushuPipeline")
 

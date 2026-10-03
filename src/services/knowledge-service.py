@@ -3,7 +3,7 @@ import os
 import sqlite3
 import json
 from typing import List, Tuple, Dict, Optional, Set
-from src import (
+from src.models import (
     TokenModel, DictionaryEntry, DefinitionTag, InflectionRule,
     GrammarEntry, PhraseEntry, CompoundWordEntry, MatchedKnowledgeUnit
 )
@@ -12,8 +12,8 @@ from src import (
 class KnowledgeService:
     """Manages dictionary lookup against local SQLite DB and identifies OOV words."""
 
-    STAGING_DB = os.path.join(os.path.dirname(__file__), "..", "data", "jmdict_1000_staging.db")
-    DICT_DB = os.path.join(os.path.dirname(__file__), "..", "data", "dictionary.db")
+    STAGING_DB = os.path.join(os.path.dirname(__file__), "..", "..", "data", "jmdict_1000_staging.db")
+    DICT_DB = os.path.join(os.path.dirname(__file__), "..", "..", "data", "dictionary.db")
     DEFAULT_DB_PATH = STAGING_DB if os.path.exists(STAGING_DB) else DICT_DB
 
     _FB = [
@@ -137,7 +137,7 @@ class KnowledgeService:
     def match_hierarchical(self, tokens: List[TokenModel], sentence_text: str = "") -> Tuple[List[MatchedKnowledgeUnit], List[TokenModel]]:
         """Matches tokens through priority hierarchy: Grammar -> Phrase -> CompoundWord -> Word."""
         import importlib
-        matcher_cls = importlib.import_module(".hierarchical-matcher", package="src").HierarchicalKnowledgeMatcher
+        matcher_cls = importlib.import_module(".hierarchical-matcher", package="src.services").HierarchicalKnowledgeMatcher
         return matcher_cls(self).match(tokens, sentence_text)
 
     def register_enriched_oov(self, entry: DictionaryEntry, new_status: str = "ADAPTED", original_term: Optional[str] = None):

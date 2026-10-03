@@ -5,10 +5,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import (
-    KnowledgeService, GinzaReferenceService, TokenModel, MatchedKnowledgeUnit
-)
-
+from src.services import KnowledgeService, GinzaReferenceService
+from src.models import TokenModel, MatchedKnowledgeUnit
 
 class TestHierarchicalMatching(unittest.TestCase):
     @classmethod

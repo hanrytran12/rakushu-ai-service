@@ -7,16 +7,8 @@ import subprocess
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import (
-    MediaInspector,
-    VideoType,
-    MediaInspectionResult,
-    InvalidMediaError,
-    InvalidLanguageError,
-    ProhibitedContentError,
-    AsrService,
-)
-
+from src.models import VideoType, MediaInspectionResult
+from src.services import MediaInspector, InvalidMediaError, InvalidLanguageError, ProhibitedContentError, AsrService
 
 class TestMediaInspector(unittest.TestCase):
     @classmethod
@@ -91,7 +83,7 @@ class TestMediaInspector(unittest.TestCase):
 
     def test_06_source_based_moderation_distinction(self):
         """Verifies that YouTube source trusts platform moderation, while LOCAL_UPLOAD moderates metadata."""
-        from src import MediaSourceType
+        from src.models import MediaSourceType
         if not os.path.exists(self.sample_media):
             self.skipTest("Sample media not found.")
 
@@ -143,6 +135,3 @@ class TestMediaInspector(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-

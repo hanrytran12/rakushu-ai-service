@@ -2,7 +2,7 @@
 import importlib
 from typing import Dict, Any
 
-_api_models = importlib.import_module(".api-models", package="src")
+_api_models = importlib.import_module(".api-models", package="src.api")
 PipelineApiResponse = _api_models.PipelineApiResponse
 PipelineData = _api_models.PipelineData
 PipelineSummary = _api_models.PipelineSummary
