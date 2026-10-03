@@ -63,7 +63,7 @@ def pipeline_health() -> Dict[str, Any]:
 @router.post("/process-url", include_in_schema=False)
 @router.post("/process-url/stream", include_in_schema=False)
 def stream_video_url_endpoint(req: ProcessUrlRequest) -> StreamingResponse:
-    """Streams real-time SSE events (ASR -> Global Translation -> Sentence-by-sentence) from YouTube or media URL."""
+    """Streams real-time SSE events (ASR -> chunk translation -> sentence enrichment) from YouTube or media URL."""
     logger.info(f">>> [Stream Request] Received URL: '{req.url}'")
     return _stream_response(stream_pipeline(req.url))
 

@@ -3,6 +3,8 @@ import sys
 import time
 import logging
 
+from src.logging_utils import create_pipeline_log, close_pipeline_log
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 if sys.stdout.encoding != "utf-8":
     try:
@@ -23,8 +25,7 @@ logger = logging.getLogger("RakushuPipeline")
 def _print_pipeline_summary(result: PipelineResult):
     """Prints a structured summary of translation, tokens, bunsetsu, and OOVs."""
     print(f"\n{'=' * 80}\n [OUTCOME] TWO-STAGE TRANSLATION & TOKEN MEANING BREAKDOWN:\n{'=' * 80}")
-    print(f'Global Transcript: "{result.segment.text}"')
-    print(f'Global Translation: "{result.full_translation}"')
+    print(f'Transcript: "{result.segment.text}"')
     for idx, s in enumerate(result.sentences, start=1):
         print(f"\n[Sentence #{idx}] ({s.segment.start_time:.1f}s -> {s.segment.end_time:.1f}s)")
         print(f"  JP: {s.segment.text}\n  VI: {s.translation}")
@@ -55,6 +56,8 @@ def _print_pipeline_summary(result: PipelineResult):
 
 def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> PipelineResult:
     total_start_time = time.time()
+    log_path, log_handler = create_pipeline_log("pipeline")
+    logger.info(f"[RUN LOG] Full pipeline log: {os.path.abspath(log_path)}")
     print("\n" + "=" * 80)
     print(" [RAKUSHU AI CORE] ASR -> GINZA NLP -> SENTENCE TRANSLATION PIPELINE\n" + "=" * 80)
 
@@ -83,7 +86,8 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         full_segment = asr_svc.transcribe(media_file_path, title=title, source_type=source_type)
     except (InvalidLanguageError, ProhibitedContentError, InvalidMediaError) as err:
         logger.error(f"\n{'='*80}\n [REJECTED] MEDIA INPUT VALIDATION FAILED:\n - Reason: {err}\n - Action: Pipeline aborted early.\n{'='*80}")
-        return PipelineResult(segment=SubtitleSegment(text=f"[REJECTED] {err}"), full_translation="")
+        close_pipeline_log(log_handler)
+        return PipelineResult(segment=SubtitleSegment(text=f"[REJECTED] {err}"))
     if video_meta:
         full_segment.video_id = video_meta.get("video_id", full_segment.video_id)
         full_segment.video_title = video_meta.get("title", "")
@@ -102,16 +106,10 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
 
     if not full_segment.text.strip():
         logger.warning("   [ASR Notice] No speech detected in media. Returning empty result.")
-        return PipelineResult(segment=full_segment, full_translation="", tokens=[], matched_knowledge=[], oov_candidates=[], bunsetsu_phrases=[], sentences=[])
+        close_pipeline_log(log_handler)
+        return PipelineResult(segment=full_segment, tokens=[], matched_knowledge=[], oov_candidates=[], bunsetsu_phrases=[], sentences=[])
 
-    # 2. Stage 1: Full Transcription Translation for Global Context
-    t1 = time.time()
-    logger.info("\n>>> STEP 2: Translating full transcription for overarching global context...")
-    full_translation = llm_svc.translate_full_transcription(full_segment.text)
-    full_segment.translation = full_translation
-    logger.info(f"   [Global Translation (VI)]: \"{full_translation}\"")
-    logger.info(f"   [STEP 2 COMPLETED] Time: {time.time() - t1:.2f}s")
-
+    # Chunk-level translation is the canonical translation source.
     # 3. Split Transcription into Sentences via GiNZA
     t2 = time.time()
     logger.info("\n>>> STEP 3: Splitting transcription into sentences via GiNZA...")
@@ -122,9 +120,66 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     total_dur = full_segment.end_time - full_segment.start_time
     curr_char = 0
     sentence_subtitles, all_tokens, all_matched, all_knowledge_units, all_bunsetsu = [], [], [], [], []
+    translation_failures = []
 
-    # 4. Stage 2: Sentence-by-Sentence Contextual Translation & Token Meaning Extraction
+    # 4. Stage 2: Sentence translation inside bounded chunks.
+    chunk_ranges = llm_svc.build_translation_chunks(sentence_texts)
+    chunk_map = {}
+    for chunk_no, (chunk_start, chunk_end) in enumerate(chunk_ranges, start=1):
+        for sentence_index in range(chunk_start, chunk_end):
+            chunk_map[sentence_index] = chunk_no
+    logger.info(f"   [Translation Planner] Created {len(chunk_ranges)} LLM translation chunks.")
+
+    # One LLM request per chunk; sentence-level translation is fallback-only.
+    chunk_results_by_sentence = {}
+    chunk_batch_meta = {}
+    for chunk_no, (chunk_start, chunk_end) in enumerate(chunk_ranges, start=1):
+        chunk_t0 = time.time()
+        chunk_input = [
+            {"sentence_number": i + 1, "text": sentence_texts[i]}
+            for i in range(chunk_start, chunk_end)
+        ]
+        try:
+            chunk_results = llm_svc.translate_chunk(chunk_input)
+        except Exception as exc:
+            logger.warning(f"   [Chunk #{chunk_no}] Batch translation error: {exc}")
+            chunk_results = {}
+        expected_count = chunk_end - chunk_start
+        returned_count = len(chunk_results)
+        chunk_batch_meta[chunk_no] = {
+            "expected": expected_count,
+            "returned": returned_count,
+            "elapsed": round(time.time() - chunk_t0, 2),
+        }
+        if chunk_results:
+            chunk_results_by_sentence.update(chunk_results)
+            logger.info(
+                f"   [Chunk #{chunk_no} Batch] {returned_count}/{expected_count} results "
+                f"in {chunk_batch_meta[chunk_no]['elapsed']}s."
+            )
+            for sentence_no in range(chunk_start + 1, chunk_end + 1):
+                item = chunk_results.get(sentence_no)
+                if item:
+                    logger.info(
+                        f"      [#{sentence_no}] JP: {sentence_texts[sentence_no - 1]}"
+                    )
+                    logger.info(
+                        f"      [#{sentence_no}] VI: {str(item.get('translation_vi', '')).strip()}"
+                    )
+            missing = [
+                sentence_no for sentence_no in range(chunk_start + 1, chunk_end + 1)
+                if sentence_no not in chunk_results
+            ]
+            if missing:
+                logger.warning(f"      [Chunk #{chunk_no} Batch Missing] {missing}")
+        else:
+            logger.warning(
+                f"   [Chunk #{chunk_no} Batch] FAILED after "
+                f"{chunk_batch_meta[chunk_no]['elapsed']}s; sentence-level fallback will be used."
+            )
+
     t3 = time.time()
+    chunk_sentence_outputs = {}
     for idx, sent_text in enumerate(sentence_texts, start=1):
         s_t0 = time.time()
         sent_len = len(sent_text)
@@ -141,7 +196,11 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
             start_time=s_start,
             end_time=s_end, text=sent_text, sequence_number=idx,
         )
-        logger.info(f"\n--- Processing Sentence #{idx} [{s_start:.1f}s - {s_end:.1f}s]: \"{sent_text}\" ---")
+        chunk_no = chunk_map.get(idx - 1, 1)
+        logger.info(
+            f"\n--- Chunk #{chunk_no} | Sentence #{idx} "
+            f"[{s_start:.1f}s - {s_end:.1f}s]: \"{sent_text}\" ---"
+        )
 
         # Step A: NLP Morphological Analysis
         tokens = nlp_svc.tokenize(sent_seg)
@@ -151,12 +210,34 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         all_matched.extend(matched_k)
         all_knowledge_units.extend(hier_units)
 
-        # Step C: Sentence Translation guided by Global Context & Token Meanings
-        s_trans_vi, token_meanings, enriched_oovs = llm_svc.translate_sentence_with_context(
-            sentence_text=sent_text, full_text=full_segment.text,
-            full_translation=full_translation, tokens=tokens,
-            matched_knowledge=matched_k, oov_tokens=oov_toks
-        )
+        # Step C: Consume chunk result; fall back to sentence-level context translation only if needed.
+        chunk_item = chunk_results_by_sentence.get(idx)
+        if chunk_item:
+            s_trans_vi = str(chunk_item.get("translation_vi", "")).strip()
+            token_meanings = llm_svc._align_token_meanings(
+                chunk_item.get("token_meanings", {}), tokens, matched_k
+            )
+            enriched_oovs = llm_svc._parse_oov_candidates(
+                chunk_item.get("oov_learning", []), oov_toks, sent_text
+            )
+        else:
+            context_text = llm_svc.build_sentence_context(
+                sentence_texts, idx - 1, before=3, after=2
+            )
+            expanded_context = llm_svc.build_sentence_context(
+                sentence_texts, idx - 1, before=10, after=3
+            )
+            s_trans_vi, token_meanings, enriched_oovs = llm_svc.translate_sentence_with_context(
+                sentence_text=sent_text, context_text=context_text,
+                expanded_context_text=expanded_context,
+                tokens=tokens, matched_knowledge=matched_k, oov_tokens=oov_toks
+            )
+            if llm_svc.last_sentence_translation_failed:
+                translation_failures.append({
+                    "sentence_number": idx,
+                    "chunk_number": chunk_no,
+                    "text": sent_text,
+                })
         for o in enriched_oovs:
             oov_svc.persist_candidate(o)
         sent_seg.translation = s_trans_vi
@@ -178,11 +259,40 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
             oov_candidates=enriched_oovs, bunsetsu_phrases=phrases,
         ))
         logger.info(f"   [Sentence #{idx} Done] Elapsed: {time.time() - s_t0:.2f}s")
-    logger.info(f"   [STEP 4 COMPLETED] All sentences translated in: {time.time() - t3:.2f}s")
+        chunk_sentence_outputs[idx] = s_trans_vi
+        if idx in {end for _, end in chunk_ranges}:
+            chunk_no = chunk_map.get(idx - 1, 1)
+            chunk_start = next(start for start, end in chunk_ranges if end == idx)
+            chunk_failed = [
+                f["sentence_number"] for f in translation_failures
+                if chunk_start + 1 <= f["sentence_number"] <= idx
+            ]
+            batch_meta = chunk_batch_meta.get(chunk_no, {})
+            status = "PARTIAL" if chunk_failed else "SUCCESS"
+            logger.info(
+                f"\n{'='*70}\n"
+                f"[CHUNK #{chunk_no} COMPLETED] "
+                f"Sentences #{chunk_start + 1}-#{idx} | Status: {status} | "
+                f"Batch: {batch_meta.get('returned', 0)}/{batch_meta.get('expected', idx - chunk_start)} "
+                f"in {batch_meta.get('elapsed', 0)}s\n"
+                f"{'='*70}"
+            )
+            for sentence_no in range(chunk_start + 1, idx + 1):
+                logger.info(f"  [#{sentence_no}] JP: {sentence_texts[sentence_no - 1]}")
+                logger.info(f"  [#{sentence_no}] VI: {chunk_sentence_outputs.get(sentence_no, '')}")
+            if chunk_failed:
+                logger.warning(f"  [Chunk #{chunk_no} Fallback Failed] {chunk_failed}")
+            logger.info(f"{'='*70}")
+    if translation_failures:
+        logger.warning(
+            f"   [STEP 4 PARTIAL] {len(translation_failures)} sentence translations failed: "
+            f"{[f['sentence_number'] for f in translation_failures]}"
+        )
+    logger.info(f"   [STEP 4 COMPLETED] All sentences processed in: {time.time() - t3:.2f}s")
 
     # 5. Assemble Consolidated Pipeline Result
     result = PipelineResult(
-        segment=full_segment, full_translation=full_translation,
+        segment=full_segment,
         tokens=all_tokens, matched_knowledge=all_matched, knowledge_units=all_knowledge_units,
         oov_candidates=[o for s in sentence_subtitles for o in s.oov_candidates],
         bunsetsu_phrases=all_bunsetsu, sentences=sentence_subtitles,
@@ -191,7 +301,13 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     _print_pipeline_summary(result)
 
     total_elapsed = time.time() - total_start_time
-    logger.info(f"\n>>> [PIPELINE COMPLETED] Total processing time for video: {total_elapsed:.2f}s")
+    pipeline_status = "PARTIAL_SUCCESS" if translation_failures else "COMPLETED"
+    logger.info(
+        f"\n>>> [PIPELINE {pipeline_status}] Total processing time for video: "
+        f"{total_elapsed:.2f}s"
+    )
+    logger.info(f"[RUN LOG] Full pipeline log saved at: {os.path.abspath(log_path)}")
+    close_pipeline_log(log_handler)
     return result
 
 if __name__ == "__main__":

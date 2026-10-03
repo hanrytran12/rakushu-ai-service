@@ -78,7 +78,7 @@ def format_pipeline_result(result) -> PipelineApiResponse:
         source_url=seg.source_url or "",
         duration=duration,
         global_transcript=seg.text,
-        global_translation=result.full_translation,
+
         sentences=sentences,
         summary=summary
     )
