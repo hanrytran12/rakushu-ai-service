@@ -12,11 +12,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.models import TokenModel, SubtitleSegment, OovCandidate, CuratorReview, OovStatus, CuratorDecision, DictionaryEntry
 from src.services import KnowledgeService, OovService, LlmOovValidator
 
-_curator_models = importlib.import_module("src.models.curator-models")
+_curator_models = importlib.import_module("src.models.curator_models")
 CuratorReviewRequest = _curator_models.CuratorReviewRequest
 CuratorManualAddRequest = _curator_models.CuratorManualAddRequest
 
-api_server = importlib.import_module("src.api.api-server")
+api_server = importlib.import_module("src.api.api_server")
 app = api_server.app
 
 

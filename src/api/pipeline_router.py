@@ -9,10 +9,10 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Request, status
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
-_models = importlib.import_module(".api-models", package="src.api")
+_models = importlib.import_module(".api_models", package="src.api")
 ProcessUrlRequest = _models.ProcessUrlRequest
 
-_pipeline_streamer = importlib.import_module(".pipeline-streamer", package="src.pipeline")
+_pipeline_streamer = importlib.import_module(".pipeline_streamer", package="src.pipeline")
 stream_pipeline = _pipeline_streamer.stream_pipeline
 
 logger = logging.getLogger("PipelineRouter")

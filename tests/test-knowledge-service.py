@@ -130,5 +130,50 @@ class TestKnowledgeService(unittest.TestCase):
         self.assertIn("hôm nay", entry.meaning)
 
 
+
+    def test_05_lookup_candidates_and_token_candidate_payload(self):
+        """Returns multiple dictionary senses and stable request-local candidate IDs."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            tmp_db = f.name
+        try:
+            conn = sqlite3.connect(tmp_db)
+            conn.execute("""
+                CREATE TABLE dictionary (
+                    term TEXT, reading TEXT, pos TEXT, definition_tags TEXT,
+                    rules TEXT, score INTEGER, meaning TEXT, sequence INTEGER, term_tags TEXT
+                );
+            """)
+            conn.executemany(
+                "INSERT INTO dictionary "
+                "(term, reading, pos, score, meaning, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("やすい", "やすい", "ADJECTIVE", 10, "rẻ, giá thấp", 1),
+                    ("やすい", "やすい", "ADJECTIVE", 9, "dễ, dễ dàng", 2),
+                    ("やすい", "やすい", "ADJECTIVE", 9, "dễ thực hiện", 3),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            svc = KnowledgeService(db_path=tmp_db, exclude_terms=set())
+            candidates = svc.lookup_candidates("やすい", limit=2)
+            self.assertEqual(len(candidates), 2)
+            self.assertEqual(candidates[0].meaning, "rẻ, giá thấp")
+            self.assertEqual(candidates[1].meaning, "dễ, dễ dàng")
+
+            token = TokenModel(surface="やすい", lemma="やすい", pos="ADJECTIVE")
+            payload = svc.build_token_candidates([token], limit=2)
+            self.assertEqual(
+                [c["candidate_id"] for c in payload["やすい"]],
+                ["t1-c1", "t1-c2"],
+            )
+            self.assertEqual(
+                [c["meaning"] for c in payload["やすい"]],
+                ["rẻ, giá thấp", "dễ, dễ dàng"],
+            )
+        finally:
+            if os.path.exists(tmp_db):
+                os.remove(tmp_db)
+
 if __name__ == "__main__":
     unittest.main()

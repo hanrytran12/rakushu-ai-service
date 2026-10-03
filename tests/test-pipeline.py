@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from src.models import SubtitleSegment, SentenceSubtitle, OovCandidate
 from src.services import NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService
-runner_mod = importlib.import_module("src.pipeline.pipeline-runner")
+runner_mod = importlib.import_module("src.pipeline.pipeline_runner")
 run_pipeline = runner_mod.run_pipeline
 
 
@@ -84,7 +84,8 @@ class TestRakushuPipeline(unittest.TestCase):
             context_text=self.sample_text,
             tokens=toks1,
             matched_knowledge=mk1,
-            oov_tokens=oov1
+            oov_tokens=oov1,
+            token_candidates=knowledge_svc.build_token_candidates(toks1),
         )
         self.assertIn("chào", trans1.lower())
         self.assertIn("皆さん", t_meanings1)
@@ -98,12 +99,13 @@ class TestRakushuPipeline(unittest.TestCase):
             context_text=self.sample_text,
             tokens=toks2,
             matched_knowledge=mk2,
-            oov_tokens=oov2
+            oov_tokens=oov2,
+            token_candidates=knowledge_svc.build_token_candidates(toks2),
         )
         self.assertTrue(len(trans2) > 0)
         self.assertEqual(len(cands2), 2)
-        self.assertIn("ポッドキャスト", t_meanings2)
-        self.assertIn("若者言葉", t_meanings2)
+        self.assertNotIn("ポッドキャスト", t_meanings2)
+        self.assertNotIn("若者言葉", t_meanings2)
 
     def test_05_local_context_builder(self):
         """Validates bounded local context and context-dependent expansion."""
@@ -310,6 +312,64 @@ class TestRakushuPipeline(unittest.TestCase):
         self.assertIn("sentences", result_dict)
         self.assertEqual(len(result_dict["sentences"]), 2)
 
+
+
+    def test_14_dictionary_candidate_selection_resolves_server_meaning(self):
+        """LLM selects a candidate ID; backend supplies the actual dictionary meaning."""
+        llm_svc = LlmEnrichmentService()
+        tokens = [SubtitleSegment(text="やすい")]
+        token_model = NlpService().tokenize(tokens[0])[0]
+        token_model.surface = "やすい"
+        token_model.lemma = "やすい"
+        token_model.pos = "ADJECTIVE"
+        candidates = {
+            "やすい": [
+                {
+                    "candidate_id": "t1-c1",
+                    "term": "やすい",
+                    "reading": "やすい",
+                    "pos": "ADJECTIVE",
+                    "meaning": "rẻ, giá thấp",
+                },
+                {
+                    "candidate_id": "t1-c2",
+                    "term": "やすい",
+                    "reading": "やすい",
+                    "pos": "ADJECTIVE",
+                    "meaning": "dễ, dễ dàng",
+                },
+            ]
+        }
+
+        selected = llm_svc.resolve_token_selections(
+            [{"token": "やすい", "candidate_id": "t1-c1"}],
+            candidates,
+            [token_model],
+        )
+        self.assertEqual(selected["やすい"], "rẻ, giá thấp")
+
+        invalid = llm_svc.resolve_token_selections(
+            [{"token": "やすい", "candidate_id": "fake"}],
+            candidates,
+            [token_model],
+        )
+        self.assertEqual(invalid, {})
+
+    def test_15_single_dictionary_candidate_does_not_require_llm_selection(self):
+        """A deterministic single sense can be resolved without an LLM-generated meaning."""
+        llm_svc = LlmEnrichmentService()
+        token = NlpService().tokenize(SubtitleSegment(text="日本"))[0]
+        candidates = {
+            "日本": [{
+                "candidate_id": "t1-c1",
+                "term": "日本",
+                "reading": "にほん",
+                "pos": "NOUN",
+                "meaning": "Nhật Bản",
+            }]
+        }
+        result = llm_svc.resolve_token_selections([], candidates, [token])
+        self.assertEqual(result["日本"], "Nhật Bản")
 
 if __name__ == "__main__":
     unittest.main()

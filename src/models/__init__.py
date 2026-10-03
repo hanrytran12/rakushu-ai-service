@@ -1,7 +1,7 @@
 """Domain data contracts for Rakushu AI Service."""
 import importlib
 
-_schema = importlib.import_module(".schema-models", package=__name__)
+_schema = importlib.import_module(".schema_models", package=__name__)
 SubtitleSegment = _schema.SubtitleSegment
 TokenModel = _schema.TokenModel
 DictionaryEntry = _schema.DictionaryEntry
@@ -15,13 +15,13 @@ MediaInspectionResult = _schema.MediaInspectionResult
 VideoType = _schema.VideoType
 MediaSourceType = _schema.MediaSourceType
 
-_ext = importlib.import_module(".extended-models", package=__name__)
+_ext = importlib.import_module(".extended_models", package=__name__)
 GrammarEntry = _ext.GrammarEntry
 PhraseEntry = _ext.PhraseEntry
 CompoundWordEntry = _ext.CompoundWordEntry
 MatchedKnowledgeUnit = _ext.MatchedKnowledgeUnit
 
-_curator = importlib.import_module(".curator-models", package=__name__)
+_curator = importlib.import_module(".curator_models", package=__name__)
 CuratorReview = _curator.CuratorReview
 OovStatus = _curator.OovStatus
 CuratorDecision = _curator.CuratorDecision

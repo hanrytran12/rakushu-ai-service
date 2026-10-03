@@ -122,7 +122,7 @@ class LlmEnrichmentService:
         prompt = f"""Bạn là engine dịch Nhật-Việt cho Rakushu.
 Dịch và làm giàu TẤT CẢ các câu dưới đây trong một lần gọi.
 Giữ nguyên số câu và tuyệt đối không gộp, bỏ hoặc đổi số câu.
-Ngữ cảnh trong cùng chunk được dùng để hiểu đại từ, chủ thể và liên kết diễn ngôn.
+Ngữ cảnh trong cùng chunk được dùng để hiểu đại từ, chủ thể và liên kết diễn ngôn. Với token_candidates, chỉ được chọn candidate_id có sẵn; tuyệt đối không tự sinh hoặc sửa meaning của dictionary.
 
 INPUT:
 {json.dumps(items, ensure_ascii=False)}
@@ -133,7 +133,7 @@ Trả về JSON đúng cấu trúc:
     {{
       "sentence_number": 1,
       "translation_vi": "...",
-      "token_meanings": {{"từ": "nghĩa ngắn gọn"}},
+      "token_selections": [{{"token": "...", "candidate_id": "t1-c1"}}],
       "oov_learning": [{{"term": "...", "pos": "NOUN", "suggested_meaning": "...", "confidence_score": 0.95}}]
     }}
   ]
@@ -256,6 +256,7 @@ Chỉ trả JSON. Không thêm markdown hay giải thích.
         tokens: List[TokenModel] = None,
         matched_knowledge: List[DictionaryEntry] = None,
         oov_tokens: List[TokenModel] = None,
+        token_candidates: Dict[str, List[Dict[str, str]]] = None,
         context_text: str = "",
         expanded_context_text: str = "",
     ) -> Tuple[str, Dict[str, str], List[OovCandidate]]:
@@ -264,6 +265,7 @@ Chỉ trả JSON. Không thêm markdown hay giải thích.
         tokens = tokens or []
         matched_knowledge = matched_knowledge or []
         oov_tokens = oov_tokens or []
+        token_candidates = token_candidates or {}
         known_summary = [f"- {k.term} ({k.reading}): {k.meaning}" for k in matched_knowledge]
         content_tokens = [t.surface for t in tokens if t.pos not in ("PUNCTUATION", "PARTICLE", "AUX_VERB")]
         oov_terms_list = list({tok.surface: tok for tok in oov_tokens}.values())
@@ -275,10 +277,11 @@ Chỉ trả JSON. Không thêm markdown hay giải thích.
  Từ điển: {known_summary}
  Từ chính: {content_tokens}
  Từ OOV: {[t.surface for t in oov_terms_list]}
+ Dictionary token candidates: {json.dumps(token_candidates, ensure_ascii=False)}
 
 Yêu cầu dịch CHỈ câu cần dịch sang tiếng Việt và trả về JSON:
 - "translation_vi": bản dịch tiếng Việt của câu
-- "token_meanings": {{"từ_tiếng_nhật": "nghĩa ngắn gọn"}}
+- "token_selections": [{{"token": "từ_tiếng_nhật", "candidate_id": "t1-c1"}}] và CHỈ chọn candidate_id có trong Dictionary token candidates
 - "oov_learning": [{{"term": "từ OOV", "pos": "NOUN", "suggested_meaning": "định nghĩa", "confidence_score": 0.95}}]
 - "context_sufficient": true nếu ngữ cảnh hiện tại đủ để xác định các đại từ/tham chiếu; false nếu cần thêm ngữ cảnh
 - "context_issue": mô tả ngắn điều còn thiếu, nếu có
@@ -298,8 +301,8 @@ Yêu cầu dịch CHỈ câu cần dịch sang tiếng Việt và trả về JSO
         if res and "translation_vi" in res:
             vi_trans = str(res.get("translation_vi", "")).strip()
             if vi_trans and vi_trans.lower() not in ("bản dịch tiếng việt tự nhiên", "bản dịch tiếng việt"):
-                raw_meanings = res.get("token_meanings", {})
-                t_meanings = self._align_token_meanings(raw_meanings, tokens, matched_knowledge)
+                raw_selections = res.get("token_selections", [])
+                t_meanings = self.resolve_token_selections(raw_selections, token_candidates, tokens)
                 cands = self._parse_oov_candidates(res.get("oov_learning", []), oov_terms_list, sentence_text)
                 logger.info(f"[Sentence Fallback] SUCCESS target='{sentence_text}' | translation='{vi_trans}'")
                 return vi_trans, t_meanings, cands
@@ -314,16 +317,38 @@ Yêu cầu dịch CHỈ câu cần dịch sang tiếng Việt và trả về JSO
         }
         return "", default_meanings, []
 
-    def _align_token_meanings(self, raw: Dict[str, str], tokens: List[TokenModel], k: List[DictionaryEntry]) -> Dict[str, str]:
-        """Aligns extracted token meanings with dictionary knowledge."""
-        km = {d.term: d.meaning.split("(")[0].strip() for d in k}
-        res: Dict[str, str] = {}
-        for t in tokens:
-            if t.pos in ("PUNCTUATION", "PARTICLE", "AUX_VERB"):
+    def resolve_token_selections(
+        self,
+        selections: Any,
+        token_candidates: Dict[str, List[Dict[str, str]]],
+        tokens: List[TokenModel],
+    ) -> Dict[str, str]:
+        """Resolves LLM-selected candidate IDs using server-owned dictionary data."""
+        if not isinstance(selections, list):
+            return {}
+
+        candidate_map = {}
+        for surface, candidates in token_candidates.items():
+            for candidate in candidates:
+                candidate_id = candidate.get("candidate_id")
+                meaning = candidate.get("meaning", "").strip()
+                if candidate_id and meaning:
+                    candidate_map[(surface, candidate_id)] = meaning
+
+        resolved: Dict[str, str] = {
+            surface: candidates[0]["meaning"]
+            for surface, candidates in token_candidates.items()
+            if len(candidates) == 1 and candidates[0].get("meaning")
+        }
+        valid_surfaces = {t.surface for t in tokens}
+        for selection in selections:
+            if not isinstance(selection, dict):
                 continue
-            m = raw.get(t.surface) or raw.get(t.lemma) or raw.get(t.reading) or km.get(t.surface) or km.get(t.lemma)
-            res[t.surface] = m or t.lemma
-        return res
+            surface = str(selection.get("token", "")).strip()
+            candidate_id = str(selection.get("candidate_id", "")).strip()
+            if surface in valid_surfaces and (surface, candidate_id) in candidate_map:
+                resolved[surface] = candidate_map[(surface, candidate_id)]
+        return resolved
 
     def _parse_oov_candidates(self, items: List[Dict], oov_tokens: List[TokenModel], text: str) -> List[OovCandidate]:
         """Parses learned OOV candidates from LLM output."""
