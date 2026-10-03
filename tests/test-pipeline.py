@@ -371,5 +371,44 @@ class TestRakushuPipeline(unittest.TestCase):
         result = llm_svc.resolve_token_selections([], candidates, [token])
         self.assertEqual(result["日本"], "Nhật Bản")
 
+    def test_16_selected_meaning_propagates_to_rules_bunsetsu(self):
+        """A resolved dictionary sense must survive the Bunsetsu rules fallback."""
+        llm_svc = LlmEnrichmentService()
+        nlp_svc = NlpService()
+        tokens = nlp_svc.tokenize(SubtitleSegment(text="安いです。"))
+        candidates = {
+            "安い": [
+                {
+                    "candidate_id": "t1-c1",
+                    "term": "安い",
+                    "reading": "やすい",
+                    "pos": "ADJECTIVE",
+                    "meaning": "rẻ, giá thấp",
+                },
+                {
+                    "candidate_id": "t1-c2",
+                    "term": "安い",
+                    "reading": "やすい",
+                    "pos": "ADJECTIVE",
+                    "meaning": "dễ, dễ dàng",
+                },
+            ]
+        }
+
+        selected = llm_svc.resolve_token_selections(
+            [{"token": "安い", "candidate_id": "t1-c1"}],
+            candidates,
+            tokens,
+        )
+        self.assertEqual(selected["安い"], "rẻ, giá thấp")
+
+        bunsetsu_svc = BunsetsuService()
+        bunsetsu_svc._nlp = None
+        segment = SubtitleSegment(text="安いです。", start_time=0.0, end_time=1.0)
+        phrases = bunsetsu_svc.group_bunsetsu(segment, tokens, selected)
+
+        self.assertTrue(any("rẻ, giá thấp" in phrase.translation for phrase in phrases))
+        self.assertFalse(any("安い" == phrase.translation for phrase in phrases))
+
 if __name__ == "__main__":
     unittest.main()

@@ -204,9 +204,15 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
                 chunk_item = chunk_results_by_sentence.get(idx)
                 if chunk_item:
                     s_trans_vi = str(chunk_item.get("translation_vi", "")).strip()
+                    raw_token_selections = chunk_item.get("token_selections", [])
                     token_meanings = llm_svc.resolve_token_selections(
-                        chunk_item.get("token_selections", []), token_candidates, tokens
+                        raw_token_selections, token_candidates, tokens
                     )
+                    if raw_token_selections:
+                        logger.info(
+                            f"    [Token Meaning Trace] Sentence #{idx} | "
+                            f"selected={raw_token_selections} | resolved={token_meanings}"
+                        )
                     enriched_oovs = llm_svc._parse_oov_candidates(
                         chunk_item.get("oov_learning", []), oov_toks, sent_text
                     )
