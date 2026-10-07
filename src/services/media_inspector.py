@@ -4,7 +4,7 @@ import subprocess
 import importlib
 from typing import List, Tuple, Dict, Any, Optional
 
-_schema = importlib.import_module(".schema-models", package="src.models")
+_schema = importlib.import_module(".schema_models", package="src.models")
 MediaInspectionResult = _schema.MediaInspectionResult
 VideoType = _schema.VideoType
 MediaSourceType = _schema.MediaSourceType

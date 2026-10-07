@@ -33,11 +33,11 @@ app.add_middleware(
 )
 
 # Video Processing Pipeline Router
-_pipeline_router = importlib.import_module(".pipeline-router", package="src.api").router
+_pipeline_router = importlib.import_module(".pipeline_router", package="src.api").router
 app.include_router(_pipeline_router)
 
 # Dictionary & Internal Sync Router
-_dictionary_router = importlib.import_module(".dictionary-router", package="src.api").router
+_dictionary_router = importlib.import_module(".dictionary_router", package="src.api").router
 app.include_router(_dictionary_router)
 
 
@@ -66,4 +66,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
     host = os.environ.get("HOST", "0.0.0.0")
-    uvicorn.run("src.api.api-server:app", host=host, port=port, reload=False)
+    uvicorn.run("src.api.api_server:app", host=host, port=port, reload=False)

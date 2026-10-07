@@ -2,20 +2,20 @@
 import importlib
 
 _MODULES = {
-    "AsrService": (".asr-service", "AsrService"),
-    "NlpService": (".nlp-service", "NlpService"),
-    "KnowledgeService": (".knowledge-service", "KnowledgeService"),
-    "HierarchicalKnowledgeMatcher": (".hierarchical-matcher", "HierarchicalKnowledgeMatcher"),
-    "LlmEnrichmentService": (".llm-service", "LlmEnrichmentService"),
-    "LlmOovValidator": (".llm-oov-validator", "LlmOovValidator"),
-    "BunsetsuService": (".bunsetsu-service", "BunsetsuService"),
-    "YouTubeService": (".youtube-service", "YouTubeService"),
-    "MediaInspector": (".media-inspector", "MediaInspector"),
-    "InvalidMediaError": (".media-inspector", "InvalidMediaError"),
-    "InvalidLanguageError": (".media-inspector", "InvalidLanguageError"),
-    "ProhibitedContentError": (".media-inspector", "ProhibitedContentError"),
-    "GinzaReferenceService": (".ginza-reference-service", "GinzaReferenceService"),
-    "OovService": (".oov-service", "OovService"),
+    "AsrService": (".asr_service", "AsrService"),
+    "NlpService": (".nlp_service", "NlpService"),
+    "KnowledgeService": (".knowledge_service", "KnowledgeService"),
+    "HierarchicalKnowledgeMatcher": (".hierarchical_matcher", "HierarchicalKnowledgeMatcher"),
+    "LlmEnrichmentService": (".llm_service", "LlmEnrichmentService"),
+    "LlmOovValidator": (".llm_oov_validator", "LlmOovValidator"),
+    "BunsetsuService": (".bunsetsu_service", "BunsetsuService"),
+    "YouTubeService": (".youtube_service", "YouTubeService"),
+    "MediaInspector": (".media_inspector", "MediaInspector"),
+    "InvalidMediaError": (".media_inspector", "InvalidMediaError"),
+    "InvalidLanguageError": (".media_inspector", "InvalidLanguageError"),
+    "ProhibitedContentError": (".media_inspector", "ProhibitedContentError"),
+    "GinzaReferenceService": (".ginza_reference_service", "GinzaReferenceService"),
+    "OovService": (".oov_service", "OovService"),
 }
 
 def __getattr__(name):

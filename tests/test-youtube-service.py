@@ -117,7 +117,7 @@ class TestYouTubeService(unittest.TestCase):
     ):
         """Tests that run_pipeline detects YouTube URL, downloads MP4, and populates video_path."""
         import importlib
-        runner_mod = importlib.import_module("src.pipeline.pipeline-runner")
+        runner_mod = importlib.import_module("src.pipeline.pipeline_runner")
 
         sample_url = "https://www.youtube.com/watch?v=abcdefghijk"
         mock_yt_download.return_value = (

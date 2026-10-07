@@ -121,7 +121,11 @@ class BunsetsuService:
             combined_text = "".join(t.surface for t in cluster)
             meaning = self.PHRASE_TRANSLATIONS.get(
                 combined_text,
-                " + ".join(t.lemma for t in cluster if t.pos != "PUNCTUATION")
+                " + ".join(
+                    tm.get(t.surface, tm.get(t.lemma, t.lemma))
+                    for t in cluster
+                    if t.pos != "PUNCTUATION"
+                )
             )
             total_chars = max(len(segment.text), 1)
             start_ratio = cluster[0].start_position / total_chars

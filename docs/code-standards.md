@@ -4,7 +4,8 @@
 2. **File Length**: Maximum 200 lines per file for optimal context and maintainability.
 3. **Core Principles**: YAGNI, KISS, DRY.
 4. **Data Contract**: Follow Logical ERD schemas (`SUBTITLE_SEGMENT`, `TOKEN`, `DICTIONARY_ENTRY`, `OOV_CANDIDATE`, `PHRASE`).
-5. **Quality Gate**: Comprehensive unit tests covering all NLP tokenization, OOV detection, and Bunsetsu grouping logic.
+5. **Quality Gate**: Comprehensive unit tests covering NLP tokenization, dictionary sense selection, OOV detection, and Bunsetsu grouping logic.
+6. **Meaning Source of Truth**: For dictionary-known tokens, LLM output may only select a dictionary candidate; AI Service resolves the final meaning. LLM-generated meanings remain limited to OOV learning.
 
 ## Source Structure
 

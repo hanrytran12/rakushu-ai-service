@@ -2,6 +2,7 @@
 import os
 import sqlite3
 import json
+import re
 from typing import List, Tuple, Dict, Optional, Set
 from src.models import (
     TokenModel, DictionaryEntry, DefinitionTag, InflectionRule,
@@ -88,6 +89,132 @@ class KnowledgeService:
 
         return self.CORE_FALLBACK.get(word)
 
+    @staticmethod
+    def _expand_meanings(meaning: str) -> List[str]:
+        """Splits dictionary multi-sense text into one selectable meaning per candidate."""
+        if not meaning:
+            return []
+
+        # Dictionary imports use several conventions: numbered senses, newlines,
+        # and semicolon-separated glosses. Normalize all of them to one sense/row.
+        normalized = re.sub(r"\r\n?", "\n", meaning).strip()
+        parts = re.split(
+            r"\n+|;\s*|(?:(?<=\s)|^)(?=\d+[.)]\s*)",
+            normalized,
+        )
+
+        senses: List[str] = []
+        seen = set()
+        for part in parts:
+            sense = re.sub(r"^\s*\d+[.)]\s*", "", part).strip()
+            if not sense:
+                continue
+            key = re.sub(r"\s+", " ", sense).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            senses.append(sense)
+        return senses
+
+    def lookup_candidates(self, word: str, limit: int = 5) -> List[DictionaryEntry]:
+        """Returns bounded dictionary senses for contextual meaning selection."""
+        if not word or word in self.exclude_terms or limit <= 0:
+            return []
+
+        candidates: List[DictionaryEntry] = []
+        seen = set()
+        conn = self._get_connection()
+        if conn:
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='staging_entries'")
+                if cur.fetchone():
+                    cur.execute(
+                        "SELECT term, reading, pos, meaning_vi, gloss_en "
+                        "FROM staging_entries WHERE term = ? OR reading = ? "
+                        "ORDER BY rowid LIMIT ?",
+                        (word, word, limit * 3),
+                    )
+                    for term, reading, pos, meaning_vi, gloss_en in cur.fetchall():
+                        for sense in self._expand_meanings((meaning_vi or gloss_en or "").strip()):
+                            key = (term, reading, pos, sense)
+                            if sense and key not in seen:
+                                seen.add(key)
+                                candidates.append(
+                                    DictionaryEntry(
+                                        term=term, reading=reading, pos=pos, meaning=sense
+                                    )
+                                )
+                            if len(candidates) >= limit:
+                                break
+                        if len(candidates) >= limit:
+                            break
+                else:
+                    cur.execute(
+                        "SELECT term, reading, pos, definition_tags, rules, score, "
+                        "meaning, sequence, term_tags FROM dictionary "
+                        "WHERE term = ? OR reading = ? "
+                        "ORDER BY score DESC, sequence ASC LIMIT ?",
+                        (word, word, limit * 3),
+                    )
+                    for row in cur.fetchall():
+                        for sense in self._expand_meanings((row[6] or "").strip()):
+                            key = (row[0], row[1], row[2], sense)
+                            if sense and key not in seen:
+                                seen.add(key)
+                                candidates.append(
+                                    DictionaryEntry(
+                                        term=row[0], reading=row[1], pos=row[2],
+                                        definition_tags=row[3] or "", rules=row[4] or "",
+                                        score=int(row[5] or 1), meaning=sense,
+                                        sequence=int(row[7] or 0), term_tags=row[8] or "",
+                                    )
+                                )
+                            if len(candidates) >= limit:
+                                break
+                        if len(candidates) >= limit:
+                            break
+            finally:
+                conn.close()
+
+        if not candidates:
+            fallback = self.CORE_FALLBACK.get(word)
+            if fallback:
+                candidates.append(fallback)
+        return candidates
+
+    def build_token_candidates(
+        self, tokens: List[TokenModel], limit: int = 5
+    ) -> Dict[str, List[Dict[str, str]]]:
+        """Builds occurrence-level dictionary candidates keyed by local token key."""
+        result: Dict[str, List[Dict[str, str]]] = {}
+        for index, token in enumerate(tokens):
+            if token.pos in ("PUNCTUATION", "PARTICLE", "AUX_VERB"):
+                continue
+
+            token_key = f"t{index + 1}"
+            entries = self.lookup_candidates(token.surface, limit=limit)
+            if not entries and token.lemma != token.surface:
+                entries = self.lookup_candidates(token.lemma, limit=limit)
+            if not entries:
+                continue
+
+            result[token_key] = [
+                {
+                    "candidate_id": f"{token_key}-c{candidate_index}",
+                    "token_key": token_key,
+                    "token_id": token.token_id,
+                    "token": token.surface,
+                    "lemma": token.lemma,
+                    "term": entry.term,
+                    "reading": entry.reading,
+                    "pos": entry.pos,
+                    "meaning": entry.meaning,
+                }
+                for candidate_index, entry in enumerate(entries, start=1)
+            ]
+        return result
+
     def get_tag_info(self, tag_name: str) -> Optional[DefinitionTag]:
         if not tag_name: return None
         r = self._query_one("SELECT name, category, description_en, description_vi FROM definition_tags WHERE name = ?", (tag_name,))
@@ -137,7 +264,7 @@ class KnowledgeService:
     def match_hierarchical(self, tokens: List[TokenModel], sentence_text: str = "") -> Tuple[List[MatchedKnowledgeUnit], List[TokenModel]]:
         """Matches tokens through priority hierarchy: Grammar -> Phrase -> CompoundWord -> Word."""
         import importlib
-        matcher_cls = importlib.import_module(".hierarchical-matcher", package="src.services").HierarchicalKnowledgeMatcher
+        matcher_cls = importlib.import_module(".hierarchical_matcher", package="src.services").HierarchicalKnowledgeMatcher
         return matcher_cls(self).match(tokens, sentence_text)
 
     def register_enriched_oov(self, entry: DictionaryEntry, new_status: str = "ADAPTED", original_term: Optional[str] = None):

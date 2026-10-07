@@ -11,10 +11,13 @@
 [NLP Service]           ──► TOKEN (Surface, Lemma, POS, Reading, Romaji)
        │
        ▼
-[Knowledge Service]     ──► MATCHED_KNOWLEDGE & OOV_CANDIDATE
+[Knowledge Service]     ──► MATCHED_KNOWLEDGE & DICTIONARY_SENSE_CANDIDATES & OOV_CANDIDATE
        │
        ▼
-[LLM Service]           ──► Contextual Translation & Structured OOV Learning
+[LLM Service]           ──► Contextual Translation & Candidate Selection & Structured OOV Learning
+       │
+       ▼
+[AI Service Resolver]   ──► Validated Dictionary Meaning
        │
        ▼
 [Bunsetsu Service]      ──► PHRASE (1 Jiritsugo + N Fuzokugo + Meaning)

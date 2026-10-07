@@ -10,10 +10,10 @@ from src.models import (
     DictionaryEntry,
 )
 
-_knowledge_mod = importlib.import_module(".knowledge-service", package="src.services")
+_knowledge_mod = importlib.import_module(".knowledge_service", package="src.services")
 KnowledgeService = _knowledge_mod.KnowledgeService
 
-_init_oov_tables = importlib.import_module(".oov-schema", package="src.models").init_oov_tables
+_init_oov_tables = importlib.import_module(".oov_schema", package="src.models").init_oov_tables
 logger = logging.getLogger("OovService")
 
 

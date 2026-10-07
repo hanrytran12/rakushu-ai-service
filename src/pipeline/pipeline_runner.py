@@ -116,6 +116,19 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     sentence_texts = nlp_svc.split_sentences(full_segment.text)
     logger.info(f"   Identified {len(sentence_texts)} discrete sentences. Time: {time.time() - t2:.2f}s")
 
+    # Precompute dictionary candidates before chunk translation so the LLM can only select known senses.
+    sentence_tokens = {}
+    sentence_token_candidates = {}
+    for sentence_number, sentence_text in enumerate(sentence_texts, start=1):
+        candidate_segment = SubtitleSegment(
+            text=sentence_text, sequence_number=sentence_number
+        )
+        candidate_tokens = nlp_svc.tokenize(candidate_segment)
+        sentence_tokens[sentence_number] = candidate_tokens
+        sentence_token_candidates[sentence_number] = knowledge_svc.build_token_candidates(
+            candidate_tokens
+        )
+
     total_chars = max(len(full_segment.text), 1)
     total_dur = full_segment.end_time - full_segment.start_time
     curr_char = 0
@@ -136,7 +149,11 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
     for chunk_no, (chunk_start, chunk_end) in enumerate(chunk_ranges, start=1):
         chunk_t0 = time.time()
         chunk_input = [
-            {"sentence_number": i + 1, "text": sentence_texts[i]}
+            {
+                "sentence_number": i + 1,
+                "text": sentence_texts[i],
+                "token_candidates": sentence_token_candidates.get(i + 1, {}),
+            }
             for i in range(chunk_start, chunk_end)
         ]
         try:
@@ -203,7 +220,10 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         )
 
         # Step A: NLP Morphological Analysis
-        tokens = nlp_svc.tokenize(sent_seg)
+        tokens = sentence_tokens.get(idx, [])
+        for token in tokens:
+            token.segment_id = sent_seg.segment_id
+        token_candidates = sentence_token_candidates.get(idx, {})
         # Step B: Hierarchical Knowledge Matching (Grammar -> Phrase -> CompoundWord -> Word)
         hier_units, oov_toks = knowledge_svc.match_hierarchical(tokens, sent_text)
         matched_k = [DictionaryEntry(term=u.surface, reading=u.reading, pos=u.unit_type, meaning=u.meaning) for u in hier_units]
@@ -214,9 +234,19 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         chunk_item = chunk_results_by_sentence.get(idx)
         if chunk_item:
             s_trans_vi = str(chunk_item.get("translation_vi", "")).strip()
-            token_meanings = llm_svc._align_token_meanings(
-                chunk_item.get("token_meanings", {}), tokens, matched_k
+            raw_token_selections = chunk_item.get("token_selections", [])
+            if raw_token_selections:
+                logger.info(
+                    f"   [Token Candidate Trace] Sentence #{idx} | candidates={token_candidates}"
+                )
+            token_meanings = llm_svc.resolve_token_selections(
+                raw_token_selections, token_candidates, tokens, sentence_number=idx
             )
+            if raw_token_selections:
+                logger.info(
+                    f"   [Token Meaning Trace] Sentence #{idx} | "
+                    f"selected={raw_token_selections} | resolved={token_meanings}"
+                )
             enriched_oovs = llm_svc._parse_oov_candidates(
                 chunk_item.get("oov_learning", []), oov_toks, sent_text
             )
@@ -230,7 +260,8 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
             s_trans_vi, token_meanings, enriched_oovs = llm_svc.translate_sentence_with_context(
                 sentence_text=sent_text, context_text=context_text,
                 expanded_context_text=expanded_context,
-                tokens=tokens, matched_knowledge=matched_k, oov_tokens=oov_toks
+                tokens=tokens, matched_knowledge=matched_k, oov_tokens=oov_toks,
+                token_candidates=token_candidates,
             )
             if llm_svc.last_sentence_translation_failed:
                 translation_failures.append({
@@ -250,6 +281,11 @@ def run_pipeline(media_path: str = "samples/japanese_podcast_10s.mp4") -> Pipeli
         all_tokens.extend(tokens)
 
         # Step E: Bunsetsu Grouping with contextual token meanings
+        logger.info(
+            f"   [Meaning Propagation Trace] Sentence #{idx} | "
+            f"resolved={token_meanings} | "
+            f"token_context={[(t.surface, t.context_meaning) for t in tokens if t.context_meaning]}"
+        )
         phrases = bunsetsu_svc.group_bunsetsu(sent_seg, tokens, token_meanings)
         all_bunsetsu.extend(phrases)
 

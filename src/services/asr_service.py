@@ -47,7 +47,7 @@ class AsrService:
         custom_config: Optional[dict] = None
     ) -> SubtitleSegment:
         import importlib
-        _mod = importlib.import_module(".media-inspector", package="src.services")
+        _mod = importlib.import_module(".media_inspector", package="src.services")
         inspector = _mod.MediaInspector()
         ProhibitedContentError = _mod.ProhibitedContentError
         InvalidLanguageError = _mod.InvalidLanguageError

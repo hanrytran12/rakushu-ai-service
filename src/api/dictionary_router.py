@@ -4,10 +4,10 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Query, status
 
-_models = importlib.import_module(".schema-models", package="src.models")
+_models = importlib.import_module(".schema_models", package="src.models")
 DictionaryEntry = _models.DictionaryEntry
 
-_knowledge_mod = importlib.import_module(".knowledge-service", package="src.services")
+_knowledge_mod = importlib.import_module(".knowledge_service", package="src.services")
 KnowledgeService = _knowledge_mod.KnowledgeService
 
 router = APIRouter(prefix="/api/v1", tags=["Dictionary & Knowledge Base"])
