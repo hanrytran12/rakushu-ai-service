@@ -122,7 +122,7 @@ class LlmEnrichmentService:
         prompt = f"""Bạn là engine dịch Nhật-Việt cho Rakushu.
 Dịch và làm giàu TẤT CẢ các câu dưới đây trong một lần gọi.
 Giữ nguyên số câu và tuyệt đối không gộp, bỏ hoặc đổi số câu.
-Ngữ cảnh trong cùng chunk được dùng để hiểu đại từ, chủ thể và liên kết diễn ngôn. Với token_candidates, chỉ được chọn candidate_id có sẵn; tuyệt đối không tự sinh hoặc sửa meaning của dictionary.
+Ngữ cảnh trong cùng chunk được dùng để hiểu đại từ, chủ thể và liên kết diễn ngôn. Với token_candidates, chỉ được chọn candidate_id có sẵn và phải dùng đúng token_key tương ứng; tuyệt đối không tự sinh phrase làm token hoặc sửa meaning của dictionary.
 
 INPUT:
 {json.dumps(items, ensure_ascii=False)}
@@ -133,7 +133,7 @@ Trả về JSON đúng cấu trúc:
     {{
       "sentence_number": 1,
       "translation_vi": "...",
-      "token_selections": [{{"token": "...", "candidate_id": "t1-c1"}}],
+      "token_selections": [{{"token_key": "t1", "candidate_id": "t1-c1"}}],
       "oov_learning": [{{"term": "...", "pos": "NOUN", "suggested_meaning": "...", "confidence_score": 0.95}}]
     }}
   ]
@@ -155,6 +155,13 @@ Chỉ trả JSON. Không thêm markdown hay giải thích.
                 continue
             translation = str(item.get("translation_vi", "")).strip()
             if number in expected and number not in parsed and translation:
+                normalized_selections = []
+                for selection in item.get("token_selections", []) or []:
+                    if isinstance(selection, dict):
+                        normalized = dict(selection)
+                        normalized["sentence_number"] = number
+                        normalized_selections.append(normalized)
+                item["token_selections"] = normalized_selections
                 parsed[number] = item
         return parsed
 
@@ -281,7 +288,7 @@ Chỉ trả JSON. Không thêm markdown hay giải thích.
 
 Yêu cầu dịch CHỈ câu cần dịch sang tiếng Việt và trả về JSON:
 - "translation_vi": bản dịch tiếng Việt của câu
-- "token_selections": [{{"token": "từ_tiếng_nhật", "candidate_id": "t1-c1"}}] và CHỈ chọn candidate_id có trong Dictionary token candidates
+- "token_selections": [{{"token_key": "t1", "candidate_id": "t1-c1"}}]; token_key PHẢI là key có trong Dictionary token candidates của câu hiện tại và candidate_id PHẢI thuộc đúng token_key. KHÔNG tự điền token/surface/phrase trong selection.
 - "oov_learning": [{{"term": "từ OOV", "pos": "NOUN", "suggested_meaning": "định nghĩa", "confidence_score": 0.95}}]
 - "context_sufficient": true nếu ngữ cảnh hiện tại đủ để xác định các đại từ/tham chiếu; false nếu cần thêm ngữ cảnh
 - "context_issue": mô tả ngắn điều còn thiếu, nếu có
@@ -309,7 +316,6 @@ Yêu cầu dịch CHỈ câu cần dịch sang tiếng Việt và trả về JSO
 
         self.last_sentence_translation_failed = True
         logger.warning(f"[Sentence Fallback] FINAL FAILURE target='{sentence_text}' | returning empty translation")
-        logger.warning(f"[Sentence Fallback] FINAL FAILURE target='{sentence_text}' | returning empty translation")
         km = {d.term: d.meaning.split("(")[0].strip() for d in matched_knowledge}
         default_meanings = {
             t.surface: km.get(t.surface, km.get(t.lemma, ""))
@@ -322,32 +328,106 @@ Yêu cầu dịch CHỈ câu cần dịch sang tiếng Việt và trả về JSO
         selections: Any,
         token_candidates: Dict[str, List[Dict[str, str]]],
         tokens: List[TokenModel],
+        sentence_number: Optional[int] = None,
     ) -> Dict[str, str]:
-        """Resolves LLM-selected candidate IDs using server-owned dictionary data."""
+        """Resolves LLM selections against occurrence-level, server-owned candidates."""
         if not isinstance(selections, list):
-            return {}
+            selections = []
 
-        candidate_map = {}
-        for surface, candidates in token_candidates.items():
-            for candidate in candidates:
-                candidate_id = candidate.get("candidate_id")
-                meaning = candidate.get("meaning", "").strip()
-                if candidate_id and meaning:
-                    candidate_map[(surface, candidate_id)] = meaning
-
-        resolved: Dict[str, str] = {
-            surface: candidates[0]["meaning"]
-            for surface, candidates in token_candidates.items()
-            if len(candidates) == 1 and candidates[0].get("meaning")
+        token_by_key = {
+            f"t{index + 1}": token
+            for index, token in enumerate(tokens)
         }
-        valid_surfaces = {t.surface for t in tokens}
+        candidate_map = {}
+        for token_key, candidates in token_candidates.items():
+            token = token_by_key.get(token_key)
+            for candidate in candidates:
+                candidate_id = str(candidate.get("candidate_id", "")).strip()
+                candidate_token_id = str(candidate.get("token_id", "")).strip()
+                meaning = str(candidate.get("meaning", "")).strip()
+                if (
+                    token is not None
+                    and candidate_token_id == token.token_id
+                    and candidate_id
+                    and meaning
+                ):
+                    candidate_map[(token_key, candidate_id)] = meaning
+
+        # Return both token_id and surface aliases for existing downstream consumers.
+        # token_id is authoritative, while surface keeps Bunsetsu/API compatibility.
+        resolved: Dict[str, str] = {}
+        for token_key, candidates in token_candidates.items():
+            token = token_by_key.get(token_key)
+            if token is None or len(candidates) != 1:
+                continue
+            candidate = candidates[0]
+            candidate_token_id = str(candidate.get("token_id", "")).strip()
+            meaning = str(candidate.get("meaning", "")).strip()
+            if candidate_token_id != token.token_id or not meaning:
+                continue
+            resolved[token.token_id] = meaning
+            resolved.setdefault(token.surface, meaning)
+
         for selection in selections:
             if not isinstance(selection, dict):
                 continue
-            surface = str(selection.get("token", "")).strip()
+
+            selected_sentence = selection.get("sentence_number")
+            if sentence_number is not None and selected_sentence is not None:
+                try:
+                    if int(selected_sentence) != int(sentence_number):
+                        logger.warning(
+                            f"[Token Selection Reject] reason=sentence_number_mismatch "
+                            f"selected_sentence={selected_sentence!r} expected={sentence_number!r}"
+                        )
+                        continue
+                except (TypeError, ValueError):
+                    logger.warning(
+                        f"[Token Selection Reject] reason=invalid_sentence_number "
+                        f"selected_sentence={selected_sentence!r} expected={sentence_number!r}"
+                    )
+                    continue
+
+            token_key = str(selection.get("token_key", "")).strip()
             candidate_id = str(selection.get("candidate_id", "")).strip()
-            if surface in valid_surfaces and (surface, candidate_id) in candidate_map:
-                resolved[surface] = candidate_map[(surface, candidate_id)]
+            token = token_by_key.get(token_key)
+            if token is None:
+                logger.warning(
+                    f"[Token Selection Reject] reason=unknown_token_key token_key={token_key!r} "
+                    f"candidate_id={candidate_id!r}"
+                )
+                continue
+
+            selected_token = str(selection.get("token", "")).strip()
+            if selected_token and selected_token != token.surface:
+                logger.warning(
+                    f"[Token Selection Reject] reason=token_surface_mismatch token_key={token_key!r} "
+                    f"selected_token={selected_token!r} expected={token.surface!r} "
+                    f"candidate_id={candidate_id!r}"
+                )
+                continue
+
+            meaning = candidate_map.get((token_key, candidate_id))
+            if not meaning:
+                candidates_for_token = token_candidates.get(token_key, [])
+                known_candidate_ids = [str(c.get("candidate_id", "")) for c in candidates_for_token]
+                if candidate_id not in known_candidate_ids:
+                    reason = "unknown_candidate"
+                else:
+                    candidate_entry = next(
+                        (c for c in candidates_for_token if str(c.get("candidate_id", "")) == candidate_id),
+                        None,
+                    )
+                    reason = "candidate_token_id_mismatch" if candidate_entry and str(candidate_entry.get("token_id", "")) != token.token_id else "missing_meaning"
+                logger.warning(
+                    f"[Token Selection Reject] reason={reason} token_key={token_key!r} "
+                    f"candidate_id={candidate_id!r} token_id={token.token_id!r}"
+                )
+                continue
+
+            resolved[token.token_id] = meaning
+            resolved[token.surface] = meaning
+
         return resolved
 
     def _parse_oov_candidates(self, items: List[Dict], oov_tokens: List[TokenModel], text: str) -> List[OovCandidate]:

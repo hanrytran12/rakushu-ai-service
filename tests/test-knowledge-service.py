@@ -163,14 +163,60 @@ class TestKnowledgeService(unittest.TestCase):
 
             token = TokenModel(surface="やすい", lemma="やすい", pos="ADJECTIVE")
             payload = svc.build_token_candidates([token], limit=2)
+            self.assertEqual(list(payload.keys()), ["t1"])
             self.assertEqual(
-                [c["candidate_id"] for c in payload["やすい"]],
+                [c["candidate_id"] for c in payload["t1"]],
                 ["t1-c1", "t1-c2"],
             )
             self.assertEqual(
-                [c["meaning"] for c in payload["やすい"]],
+                [c["meaning"] for c in payload["t1"]],
                 ["rẻ, giá thấp", "dễ, dễ dàng"],
             )
+            self.assertEqual(payload["t1"][0]["token"], "やすい")
+            self.assertEqual(payload["t1"][0]["token_id"], token.token_id)
+
+        finally:
+            if os.path.exists(tmp_db):
+                os.remove(tmp_db)
+
+
+    def test_06_multi_gloss_expands_to_individual_senses_and_duplicate_tokens_align(self):
+        """Each gloss is a separate candidate and repeated surfaces keep separate token groups."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            tmp_db = f.name
+        try:
+            conn = sqlite3.connect(tmp_db)
+            conn.execute("""
+                CREATE TABLE dictionary (
+                    term TEXT, reading TEXT, pos TEXT, definition_tags TEXT,
+                    rules TEXT, score INTEGER, meaning TEXT, sequence INTEGER, term_tags TEXT
+                );
+            """)
+            conn.execute(
+                "INSERT INTO dictionary "
+                "(term, reading, pos, score, meaning, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+                ("勉強", "べんきょう", "NOUN", 10,
+                 "1. học tập; 2. nỗ lực học tập; 3. kinh nghiệm; 4. kiến thức", 1),
+            )
+            conn.commit()
+            conn.close()
+
+            svc = KnowledgeService(db_path=tmp_db, exclude_terms=set())
+            entries = svc.lookup_candidates("勉強", limit=5)
+            self.assertEqual(
+                [entry.meaning for entry in entries],
+                ["học tập", "nỗ lực học tập", "kinh nghiệm", "kiến thức"],
+            )
+
+            token1 = TokenModel(surface="勉強", lemma="勉強", pos="NOUN")
+            token2 = TokenModel(surface="勉強", lemma="勉強", pos="NOUN")
+            payload = svc.build_token_candidates([token1, token2], limit=2)
+
+            self.assertEqual(list(payload.keys()), ["t1", "t2"])
+            self.assertNotEqual(payload["t1"][0]["token_id"], payload["t2"][0]["token_id"])
+            self.assertEqual(payload["t1"][0]["candidate_id"], "t1-c1")
+            self.assertEqual(payload["t2"][0]["candidate_id"], "t2-c1")
+            self.assertTrue(all(";" not in c["meaning"] for c in payload["t1"]))
         finally:
             if os.path.exists(tmp_db):
                 os.remove(tmp_db)

@@ -7,7 +7,7 @@ import importlib
 # Ensure src package is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.models import SubtitleSegment, SentenceSubtitle, OovCandidate
+from src.models import SubtitleSegment, SentenceSubtitle, OovCandidate, DictionaryEntry
 from src.services import NlpService, KnowledgeService, LlmEnrichmentService, BunsetsuService
 runner_mod = importlib.import_module("src.pipeline.pipeline_runner")
 run_pipeline = runner_mod.run_pipeline
@@ -323,9 +323,13 @@ class TestRakushuPipeline(unittest.TestCase):
         token_model.lemma = "やすい"
         token_model.pos = "ADJECTIVE"
         candidates = {
-            "やすい": [
+            "t1": [
                 {
                     "candidate_id": "t1-c1",
+                    "token_key": "t1",
+                    "token_id": token_model.token_id,
+                    "token": "やすい",
+                    "lemma": "やすい",
                     "term": "やすい",
                     "reading": "やすい",
                     "pos": "ADJECTIVE",
@@ -333,6 +337,10 @@ class TestRakushuPipeline(unittest.TestCase):
                 },
                 {
                     "candidate_id": "t1-c2",
+                    "token_key": "t1",
+                    "token_id": token_model.token_id,
+                    "token": "やすい",
+                    "lemma": "やすい",
                     "term": "やすい",
                     "reading": "やすい",
                     "pos": "ADJECTIVE",
@@ -342,26 +350,76 @@ class TestRakushuPipeline(unittest.TestCase):
         }
 
         selected = llm_svc.resolve_token_selections(
-            [{"token": "やすい", "candidate_id": "t1-c1"}],
+            [{"token_key": "t1", "token": "やすい", "candidate_id": "t1-c1"}],
             candidates,
             [token_model],
         )
+        self.assertEqual(selected[token_model.token_id], "rẻ, giá thấp")
         self.assertEqual(selected["やすい"], "rẻ, giá thấp")
 
         invalid = llm_svc.resolve_token_selections(
-            [{"token": "やすい", "candidate_id": "fake"}],
+            [{"token_key": "t1", "token": "やすai", "candidate_id": "t1-c1"}],
             candidates,
             [token_model],
         )
         self.assertEqual(invalid, {})
+
+        phrase = llm_svc.resolve_token_selections(
+            [{"token": "彼は今、たしか30歳ぐらいで", "candidate_id": "t1-c1"}],
+            candidates,
+            [token_model],
+        )
+        self.assertEqual(phrase, {})
+
+    def test_14b_chunk_selection_is_scoped_to_sentence(self):
+        """A selection from another sentence must be rejected even when token keys collide."""
+        llm_svc = LlmEnrichmentService()
+        token = NlpService().tokenize(SubtitleSegment(text="今日"))[0]
+        candidates = {
+            "t1": [
+                {
+                    "candidate_id": "t1-c1",
+                    "token_key": "t1",
+                    "token_id": token.token_id,
+                    "token": "今日",
+                    "lemma": "今日",
+                    "term": "今日",
+                    "reading": "きょう",
+                    "pos": "NOUN",
+                    "meaning": "hôm nay",
+                },
+                {
+                    "candidate_id": "t1-c2",
+                    "token_key": "t1",
+                    "token_id": token.token_id,
+                    "token": "今日",
+                    "lemma": "今日",
+                    "term": "今日",
+                    "reading": "きょう",
+                    "pos": "NOUN",
+                    "meaning": "ngày hôm nay",
+                },
+            ]
+        }
+        result = llm_svc.resolve_token_selections(
+            [{"sentence_number": 1, "token_key": "t1", "candidate_id": "t1-c1"}],
+            candidates,
+            [token],
+            sentence_number=2,
+        )
+        self.assertEqual(result, {})
 
     def test_15_single_dictionary_candidate_does_not_require_llm_selection(self):
         """A deterministic single sense can be resolved without an LLM-generated meaning."""
         llm_svc = LlmEnrichmentService()
         token = NlpService().tokenize(SubtitleSegment(text="日本"))[0]
         candidates = {
-            "日本": [{
+            "t1": [{
                 "candidate_id": "t1-c1",
+                "token_key": "t1",
+                "token_id": token.token_id,
+                "token": "日本",
+                "lemma": "日本",
                 "term": "日本",
                 "reading": "にほん",
                 "pos": "NOUN",
@@ -369,7 +427,151 @@ class TestRakushuPipeline(unittest.TestCase):
             }]
         }
         result = llm_svc.resolve_token_selections([], candidates, [token])
+        self.assertEqual(result[token.token_id], "Nhật Bản")
         self.assertEqual(result["日本"], "Nhật Bản")
+
+    def test_17_resolver_rejection_reasons_are_explicit(self):
+        """Every invalid selection shape is rejected with a specific audit reason."""
+        llm_svc = LlmEnrichmentService()
+        token = NlpService().tokenize(SubtitleSegment(text="今日"))[0]
+        valid = {
+            "t1": [{
+                "candidate_id": "t1-c1",
+                "token_key": "t1",
+                "token_id": token.token_id,
+                "token": "今日",
+                "lemma": "今日",
+                "term": "今日",
+                "reading": "きょう",
+                "pos": "NOUN",
+                "meaning": "hôm nay",
+            }]
+        }
+
+        cases = [
+            ({"token_key": "t9", "candidate_id": "t9-c1"}, "unknown_token_key"),
+            ({"token_key": "t1", "token": "明日", "candidate_id": "t1-c1"}, "token_surface_mismatch"),
+            ({"token_key": "t1", "candidate_id": "t1-c9"}, "unknown_candidate"),
+        ]
+        # Keep two valid candidates so an invalid selection cannot be masked by
+        # deterministic single-candidate auto-resolution.
+        valid["t1"].append(dict(valid["t1"][0], candidate_id="t1-c2", meaning="ngày hôm nay"))
+
+        for selection, reason in cases:
+            with self.subTest(reason=reason), self.assertLogs("RakushuPipeline", level="WARNING") as logs:
+                result = llm_svc.resolve_token_selections([selection], valid, [token])
+            self.assertEqual(result, {})
+            self.assertTrue(any(f"reason={reason}" in line for line in logs.output))
+
+        mismatched_id = dict(valid["t1"][0])
+        mismatched_id["token_id"] = "other-token-id"
+        with self.assertLogs("RakushuPipeline", level="WARNING") as logs:
+            result = llm_svc.resolve_token_selections(
+                [{"token_key": "t1", "candidate_id": "t1-c1"}],
+                {"t1": [mismatched_id]},
+                [token],
+            )
+        self.assertEqual(result, {})
+        self.assertTrue(any("reason=candidate_token_id_mismatch" in line for line in logs.output))
+
+        missing_meaning = dict(valid["t1"][0])
+        missing_meaning["meaning"] = ""
+        with self.assertLogs("RakushuPipeline", level="WARNING") as logs:
+            result = llm_svc.resolve_token_selections(
+                [{"token_key": "t1", "candidate_id": "t1-c1"}],
+                {"t1": [missing_meaning, valid["t1"][1]]},
+                [token],
+            )
+        self.assertEqual(result, {})
+        self.assertTrue(any("reason=missing_meaning" in line for line in logs.output))
+
+        with self.assertLogs("RakushuPipeline", level="WARNING") as logs:
+            result = llm_svc.resolve_token_selections(
+                [{"sentence_number": "bad", "token_key": "t1", "candidate_id": "t1-c1"}],
+                valid,
+                [token],
+                sentence_number=1,
+            )
+        self.assertEqual(result, {})
+        self.assertTrue(any("reason=invalid_sentence_number" in line for line in logs.output))
+
+    def test_18_hierarchical_matching_prefers_longest_span_and_priority(self):
+        """Phrase/grammar/compound matching is server-owned and longest-first."""
+        from types import SimpleNamespace
+        from src.services.hierarchical_matcher import HierarchicalKnowledgeMatcher
+
+        class FakeKnowledge:
+            def lookup_grammar(self, term):
+                if term == "ABC":
+                    return SimpleNamespace(reading="grammar", meaning="grammar")
+                return None
+
+            def lookup_phrase(self, term):
+                if term in {"ABC", "AB"}:
+                    return SimpleNamespace(reading="phrase", meaning=f"phrase:{term}")
+                return None
+
+            def lookup_compound_word(self, term):
+                if term == "BC":
+                    return SimpleNamespace(reading="compound", meaning="compound:BC")
+                return None
+
+            def lookup(self, term):
+                return None
+
+            def is_rejected_oov(self, term):
+                return False
+
+        tokens = [
+            SimpleNamespace(surface="A", lemma="A", reading="A", pos="NOUN"),
+            SimpleNamespace(surface="B", lemma="B", reading="B", pos="NOUN"),
+            SimpleNamespace(surface="C", lemma="C", reading="C", pos="NOUN"),
+        ]
+        matcher = HierarchicalKnowledgeMatcher(FakeKnowledge())
+        matched, oov = matcher.match(tokens, "ABC")
+
+        self.assertEqual([(u.unit_type, u.surface, u.start_token_idx, u.end_token_idx) for u in matched], [
+            ("GRAMMAR", "ABC", 0, 2),
+        ])
+        self.assertEqual(oov, [])
+
+    def test_19_hierarchical_matching_uses_compound_then_word_fallback(self):
+        """When no grammar/phrase span exists, compound and word layers remain usable."""
+        from types import SimpleNamespace
+        from src.services.hierarchical_matcher import HierarchicalKnowledgeMatcher
+
+        class FakeKnowledge:
+            def lookup_grammar(self, term):
+                return None
+
+            def lookup_phrase(self, term):
+                return None
+
+            def lookup_compound_word(self, term):
+                if term == "BC":
+                    return SimpleNamespace(reading="BC", meaning="compound meaning")
+                return None
+
+            def lookup(self, term):
+                if term == "A":
+                    return DictionaryEntry(term="A", reading="A", meaning="word meaning")
+                return None
+
+            def is_rejected_oov(self, term):
+                return False
+
+        tokens = [
+            SimpleNamespace(surface="A", lemma="A", reading="A", pos="NOUN"),
+            SimpleNamespace(surface="B", lemma="B", reading="B", pos="NOUN"),
+            SimpleNamespace(surface="C", lemma="C", reading="C", pos="NOUN"),
+        ]
+        matched, oov = HierarchicalKnowledgeMatcher(FakeKnowledge()).match(tokens, "ABC")
+        self.assertEqual([(u.unit_type, u.surface) for u in matched], [
+            ("WORD", "A"),
+            ("COMPOUND_WORD", "BC"),
+        ])
+        self.assertEqual([(u.start_token_idx, u.end_token_idx) for u in matched], [(0, 0), (1, 2)])
+        self.assertEqual(oov, [])
 
     def test_16_selected_meaning_propagates_to_rules_bunsetsu(self):
         """A resolved dictionary sense must survive the Bunsetsu rules fallback."""
@@ -377,9 +579,13 @@ class TestRakushuPipeline(unittest.TestCase):
         nlp_svc = NlpService()
         tokens = nlp_svc.tokenize(SubtitleSegment(text="安いです。"))
         candidates = {
-            "安い": [
+            "t1": [
                 {
                     "candidate_id": "t1-c1",
+                    "token_key": "t1",
+                    "token_id": tokens[0].token_id,
+                    "token": "安い",
+                    "lemma": "安い",
                     "term": "安い",
                     "reading": "やすい",
                     "pos": "ADJECTIVE",
@@ -387,6 +593,10 @@ class TestRakushuPipeline(unittest.TestCase):
                 },
                 {
                     "candidate_id": "t1-c2",
+                    "token_key": "t1",
+                    "token_id": tokens[0].token_id,
+                    "token": "安い",
+                    "lemma": "安い",
                     "term": "安い",
                     "reading": "やすい",
                     "pos": "ADJECTIVE",
@@ -396,10 +606,11 @@ class TestRakushuPipeline(unittest.TestCase):
         }
 
         selected = llm_svc.resolve_token_selections(
-            [{"token": "安い", "candidate_id": "t1-c1"}],
+            [{"token_key": "t1", "token": "安い", "candidate_id": "t1-c1"}],
             candidates,
             tokens,
         )
+        self.assertEqual(selected[tokens[0].token_id], "rẻ, giá thấp")
         self.assertEqual(selected["安い"], "rẻ, giá thấp")
 
         bunsetsu_svc = BunsetsuService()

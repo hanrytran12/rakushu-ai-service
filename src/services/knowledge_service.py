@@ -91,16 +91,30 @@ class KnowledgeService:
 
     @staticmethod
     def _expand_meanings(meaning: str) -> List[str]:
-        """Splits dictionary multi-sense text into selectable meanings."""
+        """Splits dictionary multi-sense text into one selectable meaning per candidate."""
+        if not meaning:
+            return []
+
+        # Dictionary imports use several conventions: numbered senses, newlines,
+        # and semicolon-separated glosses. Normalize all of them to one sense/row.
+        normalized = re.sub(r"\r\n?", "\n", meaning).strip()
         parts = re.split(
-            r"\r?\n+|;\s*(?=\d+[.)]\s)|\s+(?=\d+[.)]\s)",
-            meaning,
+            r"\n+|;\s*|(?:(?<=\s)|^)(?=\d+[.)]\s*)",
+            normalized,
         )
-        return [
-            re.sub(r"^\d+[.)]\s*", "", part).strip()
-            for part in parts
-            if part.strip()
-        ]
+
+        senses: List[str] = []
+        seen = set()
+        for part in parts:
+            sense = re.sub(r"^\s*\d+[.)]\s*", "", part).strip()
+            if not sense:
+                continue
+            key = re.sub(r"\s+", " ", sense).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            senses.append(sense)
+        return senses
 
     def lookup_candidates(self, word: str, limit: int = 5) -> List[DictionaryEntry]:
         """Returns bounded dictionary senses for contextual meaning selection."""
@@ -172,19 +186,26 @@ class KnowledgeService:
     def build_token_candidates(
         self, tokens: List[TokenModel], limit: int = 5
     ) -> Dict[str, List[Dict[str, str]]]:
-        """Builds request-local dictionary candidates keyed by token surface."""
+        """Builds occurrence-level dictionary candidates keyed by local token key."""
         result: Dict[str, List[Dict[str, str]]] = {}
         for index, token in enumerate(tokens):
             if token.pos in ("PUNCTUATION", "PARTICLE", "AUX_VERB"):
                 continue
+
+            token_key = f"t{index + 1}"
             entries = self.lookup_candidates(token.surface, limit=limit)
             if not entries and token.lemma != token.surface:
                 entries = self.lookup_candidates(token.lemma, limit=limit)
             if not entries:
                 continue
-            result[token.surface] = [
+
+            result[token_key] = [
                 {
-                    "candidate_id": f"t{index + 1}-c{candidate_index}",
+                    "candidate_id": f"{token_key}-c{candidate_index}",
+                    "token_key": token_key,
+                    "token_id": token.token_id,
+                    "token": token.surface,
+                    "lemma": token.lemma,
                     "term": entry.term,
                     "reading": entry.reading,
                     "pos": entry.pos,

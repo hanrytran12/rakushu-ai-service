@@ -205,8 +205,12 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
                 if chunk_item:
                     s_trans_vi = str(chunk_item.get("translation_vi", "")).strip()
                     raw_token_selections = chunk_item.get("token_selections", [])
+                    if raw_token_selections:
+                        logger.info(
+                            f"    [Token Candidate Trace] Sentence #{idx} | candidates={token_candidates}"
+                        )
                     token_meanings = llm_svc.resolve_token_selections(
-                        raw_token_selections, token_candidates, tokens
+                        raw_token_selections, token_candidates, tokens, sentence_number=idx
                     )
                     if raw_token_selections:
                         logger.info(
@@ -240,6 +244,11 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
                     if tok.surface in token_meanings:
                         tok.context_meaning = token_meanings[tok.surface]
 
+                logger.info(
+                    f"    [Meaning Propagation Trace] Sentence #{idx} | "
+                    f"resolved={token_meanings} | "
+                    f"token_context={[(t.surface, t.context_meaning) for t in tokens if t.context_meaning]}"
+                )
                 phrases = bunsetsu_svc.group_bunsetsu(sent_seg, tokens, token_meanings)
                 for u in hier_units:
                     if u.unit_type == "GRAMMAR": total_grammar += 1
