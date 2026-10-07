@@ -1,5 +1,6 @@
 """NLP Service: Japanese morphological tokenizer and sentence segmenter using GiNZA."""
-from typing import List, Optional
+import json
+from typing import Any, Dict, List, Optional
 from src.models import TokenModel, SubtitleSegment
 
 try:
@@ -29,6 +30,9 @@ class NlpService:
         "PUNCT": "PUNCTUATION", "INTJ": "INTERJECTION", "ADV": "ADVERB",
         "CCONJ": "CONJUNCTION", "DET": "DETERMINER",
     }
+
+    def __init__(self):
+        self._ginza_doc_cache: Dict[str, Any] = {}
 
     JANOME_POS_MAP = {
         "名詞": "NOUN", "動詞": "VERB", "形容詞": "ADJECTIVE",
@@ -65,6 +69,93 @@ class NlpService:
         parts = re.split(r"(?<=[。！？!?\n])", text)
         return [p.strip() for p in parts if p.strip()]
 
+    def analyze_json(self, segment: SubtitleSegment) -> Dict[str, Any]:
+        """Return GiNZA JSON-style token output plus Bunsetsu metadata."""
+        if not (_HAS_GINZA and _GINZA_NLP):
+            tokens = self.tokenize(segment)
+            return {
+                "format": "rakushu-ginza-json-fallback",
+                "text": segment.text,
+                "tokens": [
+                    {
+                        "id": i,
+                        "orth": token.surface,
+                        "tag": token.pos,
+                        "pos": token.pos,
+                        "lemma": token.lemma,
+                        "norm": token.lemma,
+                        "head": 0,
+                        "head_absolute": 0,
+                        "dep": "ROOT" if i == 1 else "dep",
+                        "ner": "O",
+                        "start": token.start_position,
+                        "end": token.end_position,
+                        "reading": token.reading,
+                        "inf": None,
+                        "bunsetu_bi_label": "B" if i == 1 else "I",
+                        "bunsetu_position_type": "ROOT" if i == 1 else "CONT",
+                        "clause_head": 1,
+                        "whitespace": "",
+                    }
+                    for i, token in enumerate(tokens, start=1)
+                ],
+            }
+
+        doc = self._get_ginza_doc(segment.text)
+
+        # GiNZA's own JSON formatter is the source of truth for the API.
+        # This is the same formatter used by `ginza -f json`.
+        from ginza.analyzer import format_json
+        ginza_json = json.loads(format_json(next(doc.sents)))
+        tokens: List[Dict[str, Any]] = []
+        for token in doc:
+            head_offset = token.head.i - token.i
+            reading = ginza.reading_form(token, True)
+            inf = ginza.inflection(token)
+            tokens.append({
+                "id": token.i + 1,
+                "orth": token.orth_,
+                "tag": token.tag_,
+                "pos": token.pos_,
+                "lemma": token.lemma_,
+                "norm": token.norm_,
+                "head": head_offset,
+                "head_absolute": token.head.i + 1,
+                "dep": token.dep_,
+                "ner": token.ent_iob_ if not token.ent_type_ else f"{token.ent_iob_}-{token.ent_type_}",
+                "start": token.idx,
+                "end": token.idx + len(token.text),
+                "whitespace": token.whitespace_,
+                "reading": reading or "",
+                "inf": inf or "",
+                "bunsetu_bi_label": ginza.bunsetu_bi_label(token),
+                "bunsetu_position_type": ginza.bunsetu_position_type(token),
+                "clause_head": ginza.clause_head_i(token) + 1,
+                "ne": ginza.ent_label_ontonotes(token) or "O",
+                "ene": ginza.ent_label_ene(token) or "O",
+                "morph": token.morph.to_dict(),
+            })
+
+        return {
+            "format": "ginza-json",
+            "text": segment.text,
+            "ginza_json": ginza_json,
+            # `ginza_full` keeps the native formatter output and adds every
+            # GiNZA metadata field used by its CoNLL-U/accessor APIs.
+            "ginza_full": {
+                "json": ginza_json,
+                "tokens": tokens,
+            },
+            # Internal normalized token data is retained for Bunsetsu/pipeline
+            # consumers.
+            "tokens": tokens,
+        }
+
+    def _get_ginza_doc(self, text: str):
+        if text not in self._ginza_doc_cache:
+            self._ginza_doc_cache[text] = _GINZA_NLP(text)
+        return self._ginza_doc_cache[text]
+
     def tokenize(self, segment: SubtitleSegment) -> List[TokenModel]:
         """Tokenizes segment text into rich TokenModel instances."""
         if _HAS_GINZA and _GINZA_NLP:
@@ -74,7 +165,7 @@ class NlpService:
         return self._tokenize_fallback(segment)
 
     def _tokenize_ginza(self, segment: SubtitleSegment) -> List[TokenModel]:
-        doc = _GINZA_NLP(segment.text)
+        doc = self._get_ginza_doc(segment.text)
         raw_tokens: List[TokenModel] = []
         text = segment.text
 

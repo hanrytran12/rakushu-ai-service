@@ -20,6 +20,7 @@ _stream_utils = importlib.import_module(".stream_utils", package="src.utils")
 format_sse, execute_with_heartbeat = _stream_utils.format_sse, _stream_utils.execute_with_heartbeat
 build_sentence_payload, log_sentence_breakdown = _stream_utils.build_sentence_payload, _stream_utils.log_sentence_breakdown
 push_oovs_to_backend = _stream_utils.push_oovs_to_backend
+from src.services.pipeline_output_store import pipeline_output_store
 
 logger = logging.getLogger("PipelineStreamer")
 
@@ -107,11 +108,18 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
         # Precompute dictionary candidates before chunk translation so the LLM can only select known senses.
         sentence_tokens = {}
         sentence_token_candidates = {}
+        sentence_nlp_output = {}
         for sentence_number, sentence_text in enumerate(sentence_texts, start=1):
             candidate_segment = SubtitleSegment(
                 text=sentence_text, sequence_number=sentence_number
             )
+            nlp_output = nlp_svc.analyze_json(candidate_segment)
             candidate_tokens = nlp_svc.tokenize(candidate_segment)
+            sentence_nlp_output[sentence_number] = {
+                "sentence_number": sentence_number,
+                "text": sentence_text,
+                "nlp": nlp_output,
+            }
             sentence_tokens[sentence_number] = candidate_tokens
             sentence_token_candidates[sentence_number] = knowledge_svc.build_token_candidates(
                 candidate_tokens
@@ -195,6 +203,11 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
                 chunk_no = chunk_map.get(idx - 1, 1)
                 logger.info(f"    [Chunk #{chunk_no}] Processing sentence #{idx}/{total_sentences}.")
                 tokens = sentence_tokens.get(idx, [])
+                nlp_output_entry = sentence_nlp_output.get(idx)
+                if nlp_output_entry:
+                    nlp_output_entry["segment_id"] = sent_seg.segment_id
+                    nlp_output_entry["start_time"] = s_start
+                    nlp_output_entry["end_time"] = s_end
                 for token in tokens:
                     token.segment_id = sent_seg.segment_id
                 token_candidates = sentence_token_candidates.get(idx, {})
@@ -265,6 +278,8 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
                 logger.error(f"Error enriching sentence {idx}: {sent_err}", exc_info=True)
                 payload = build_sentence_payload(sent_seg, idx, total_sentences, s_start, s_end, sent_text, "", [], [], [], [])
 
+
+
             yield format_sse("sentence_processed", payload)
 
             chunk_sentence_outputs[idx] = payload.get("translation", "")
@@ -331,6 +346,10 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
         if all_oovs:
             push_oovs_to_backend(all_oovs, logger)
         pipeline_status = "PARTIAL_SUCCESS" if translation_failures else "COMPLETED"
+        pipeline_output_store.save(
+            full_segment.video_id,
+            [sentence_nlp_output[number] for number in sorted(sentence_nlp_output)],
+        )
         summary_payload = {
             "video_id": full_segment.video_id, "video_title": full_segment.video_title,
             "duration": duration, "total_processing_time": total_time,

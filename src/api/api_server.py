@@ -40,6 +40,10 @@ app.include_router(_pipeline_router)
 _dictionary_router = importlib.import_module(".dictionary_router", package="src.api").router
 app.include_router(_dictionary_router)
 
+# Read-only NLP output routers for completed video pipelines
+_nlp_router = importlib.import_module(".nlp_router", package="src.api").router
+app.include_router(_nlp_router)
+
 
 @app.get("/health", include_in_schema=False)
 def health_check() -> Dict[str, Any]:
