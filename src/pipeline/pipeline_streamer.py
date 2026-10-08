@@ -57,13 +57,22 @@ def stream_pipeline(
 
         if is_yt:
             t0_yt = time.time()
-            logger.info(f">>> [Step 0: YouTube] Detected URL: '{media_path}'. Downloading...")
+            youtube_video_id = youtube_svc.extract_video_id(media_path) or "unknown"
+            logger.info(
+                f">>> [Step 0: YouTube] Video ID: '{youtube_video_id}' | "
+                f"Detected URL: '{media_path}'. Downloading..."
+            )
             yield format_sse("progress", {"step": "youtube_download", "message": f"Downloading YouTube: {media_path}"})
             try:
                 media_file_path, video_meta = youtube_svc.download_video(media_path)
                 t_yt = round(time.time() - t0_yt, 2)
-                logger.info(f"    [Step 0 Done] Title: \"{video_meta.get('title', '')}\" | Saved: {media_file_path} | Time: {t_yt}s")
-                yield format_sse("youtube_ready", {"title": video_meta.get("title", ""), "video_id": video_meta.get("video_id", "")})
+                youtube_video_id = video_meta.get("video_id", "")
+                logger.info(
+                    f"    [Step 0 Done] Video ID: '{youtube_video_id}' | "
+                    f"Title: \"{video_meta.get('title', '')}\" | "
+                    f"Saved: {media_file_path} | Time: {t_yt}s"
+                )
+                yield format_sse("youtube_ready", {"title": video_meta.get("title", ""), "video_id": youtube_video_id})
             except Exception as e:
                 logger.error(f"    [Step 0 Failed] YouTube download error: {e}")
                 yield format_sse("error", {"error_type": "DownloadError", "message": str(e)})
