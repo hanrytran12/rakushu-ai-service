@@ -25,7 +25,11 @@ from src.services.pipeline_output_store import pipeline_output_store
 logger = logging.getLogger("PipelineStreamer")
 
 
-def stream_pipeline(media_path: str) -> Generator[str, None, None]:
+def stream_pipeline(
+    media_path: str,
+    video_id: str = "",
+    source_filename: str = "",
+) -> Generator[str, None, None]:
     """Processes media and yields SSE events progressively at each stage and sentence."""
     t_start = time.time()
     t_yt, t_asr, t_seg, t_sentences = 0.0, 0.0, 0.0, 0.0
@@ -40,6 +44,16 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
         video_meta, media_file_path = {}, media_path
         is_yt = youtube_svc.is_youtube_url(media_path)
         source_type = MediaSourceType.YOUTUBE_URL if is_yt else MediaSourceType.LOCAL_UPLOAD
+
+        # Manual uploads receive their identity at the API boundary so the same
+        # video_id can be propagated through every pipeline stage and SSE event.
+        if not is_yt and video_id:
+            logger.info(f">>> [Step 0: Upload] Assigned video_id: '{video_id}'")
+            yield format_sse("upload_ready", {
+                "video_id": video_id,
+                "source_type": source_type,
+                "filename": source_filename,
+            })
 
         if is_yt:
             t0_yt = time.time()
@@ -74,9 +88,13 @@ def stream_pipeline(media_path: str) -> Generator[str, None, None]:
             yield format_sse("error", {"error_type": "AsrError", "message": str(exc)})
             return
 
-        if video_meta:
+        if is_yt and video_meta:
             full_segment.video_id = video_meta.get("video_id", full_segment.video_id)
             full_segment.video_title = video_meta.get("title", "")
+            full_segment.source_url = media_path
+        elif video_id:
+            full_segment.video_id = video_id
+            full_segment.video_title = source_filename
             full_segment.source_url = media_path
 
         duration = round(max(full_segment.end_time - full_segment.start_time, 0.0), 2)
