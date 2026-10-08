@@ -1,4 +1,4 @@
-# Rakushu AI Service Architecture
+# Rakushu Engine Architecture
 
 ## Pipeline Data Flow
 ```
@@ -17,7 +17,7 @@
 [LLM Service]           ──► Contextual Translation & Candidate Selection & Structured OOV Learning
        │
        ▼
-[AI Service Resolver]   ──► Validated Dictionary Meaning
+[Engine Resolver]   ──► Validated Dictionary Meaning
        │
        ▼
 [Bunsetsu Service]      ──► PHRASE (1 Jiritsugo + N Fuzokugo + Meaning)

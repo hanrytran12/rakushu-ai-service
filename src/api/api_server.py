@@ -19,8 +19,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("RakushuApiServer")
 
 app = FastAPI(
-    title="Rakushu AI Service",
-    description="AI Service powering Video Ingestion & Language Learning Pipeline",
+    title="Rakushu Engine",
+    description="Language processing engine powering video ingestion and learning pipeline",
     version="1.0.0"
 )
 
@@ -50,7 +50,7 @@ def health_check() -> Dict[str, Any]:
     """Health check endpoint for service monitoring."""
     return {
         "status": "UP",
-        "service": "rakushu-ai-service",
+        "service": "rakushu-engine",
         "supported_features": ["Streaming Video Import Pipeline"]
     }
 
@@ -63,7 +63,7 @@ def stream_demo_page() -> str:
     if os.path.exists(html_file):
         with open(html_file, "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>Rakushu AI Service</h1><p>Visit <a href='/docs'>/docs</a> for API.</p>"
+    return "<h1>Rakushu Engine</h1><p>Visit <a href='/docs'>/docs</a> for API.</p>"
 
 
 if __name__ == "__main__":

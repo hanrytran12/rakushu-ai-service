@@ -1,4 +1,4 @@
-"""Rakushu AI Service source package.
+"""Rakushu Engine source package.
 
 Application code is organized by responsibility:
 - src.api: HTTP transport

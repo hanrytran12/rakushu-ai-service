@@ -72,6 +72,10 @@ class TestPipelineApi(unittest.TestCase):
 
         self.assertEqual(res.status_code, 200)
         self.assertIn("text/event-stream", res.headers["content-type"])
+        self.assertIn("event: upload_ready", res.text)
+        self.assertIn('"source_type": "LOCAL_UPLOAD"', res.text)
+        self.assertIn('"filename": "test_upload.mp4"', res.text)
+        self.assertIn('"video_id": "upload_', res.text)
         self.assertIn("event: sentence_processed", res.text)
         self.assertIn("event: chunk_completed", res.text)
         self.assertIn("event: pipeline_completed", res.text)

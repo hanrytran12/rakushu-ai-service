@@ -84,4 +84,12 @@ def stream_video_upload_endpoint(
 
     logger.info(f">>> [Stream Request] Uploaded file: '{upload_file.filename}'")
     temp_path = _save_upload(upload_file)
-    return _stream_response(stream_pipeline(temp_path), background=BackgroundTask(_cleanup_file, temp_path))
+    video_id = f"upload_{uuid.uuid4().hex}"
+    return _stream_response(
+        stream_pipeline(
+            temp_path,
+            video_id=video_id,
+            source_filename=upload_file.filename or "",
+        ),
+        background=BackgroundTask(_cleanup_file, temp_path),
+    )

@@ -1,4 +1,4 @@
-"""Domain data contracts for Rakushu AI Service."""
+"""Domain data contracts for Rakushu Engine."""
 import importlib
 
 _schema = importlib.import_module(".schema_models", package=__name__)
