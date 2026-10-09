@@ -210,12 +210,90 @@ class TestNlpOutputApi(unittest.TestCase):
         response = self.client.get("/api/v1/nlp/videos/missing/tokens")
         self.assertEqual(response.status_code, 404)
 
-    def test_no_request_text_processing_contract(self):
+    def test_post_tokens_analyzes_transcription_with_get_contract(self):
+        response = self.client.post(
+            "/api/v1/nlp/tokens",
+            json={"transcription": "日本語を勉強します。"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["success"])
+        self.assertIsNone(body["video_id"])
+        self.assertIn(body["format"], {"ginza-json", "rakushu-ginza-json-fallback"})
+        self.assertIsInstance(body["ginza"], list)
+        self.assertTrue(body["tokens"])
+        for field in ("id", "orth", "tag", "pos", "lemma", "head", "dep", "ner"):
+            self.assertIn(field, body["tokens"][0])
+
+    def test_post_tokens_flattens_multiple_sentences(self):
+        response = self.client.post(
+            "/api/v1/nlp/tokens",
+            json={"transcription": "私は学生です。日本語を勉強します。"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertGreaterEqual(len(body["ginza"]), 2)
+        token_surfaces = [token["orth"] for token in body["tokens"]]
+        self.assertTrue(any("私" in surface for surface in token_surfaces))
+        self.assertTrue(any("日本語" in surface for surface in token_surfaces))
+
+    def test_post_tokens_rejects_blank_transcription(self):
+        response = self.client.post(
+            "/api/v1/nlp/tokens",
+            json={"transcription": "   "},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_post_bunsetsu_accepts_raw_token_array(self):
+        tokens = [
+            {"id": 1, "orth": "日本語", "lemma": "日本語", "pos": "NOUN", "head_absolute": 4, "dep": "obj", "bunsetu_bi_label": "B", "bunsetu_position_type": "SEM_HEAD", "clause_head": 4},
+            {"id": 2, "orth": "を", "lemma": "を", "pos": "ADP", "head_absolute": 1, "dep": "case", "bunsetu_bi_label": "I", "bunsetu_position_type": "SYN_HEAD", "clause_head": 4},
+            {"id": 3, "orth": "勉強", "lemma": "勉強", "pos": "NOUN", "head_absolute": 4, "dep": "obl", "bunsetu_bi_label": "B", "bunsetu_position_type": "SEM_HEAD", "clause_head": 4},
+            {"id": 4, "orth": "します", "lemma": "する", "pos": "VERB", "head_absolute": 0, "dep": "ROOT", "bunsetu_bi_label": "B", "bunsetu_position_type": "ROOT", "clause_head": 4},
+        ]
+        response = self.client.post("/api/v1/nlp/bunsetsu", json=tokens)
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["success"])
+        self.assertIsNone(body["video_id"])
+        self.assertEqual([item["text"] for item in body["bunsetsu"]], ["日本語を", "勉強", "します"])
+        self.assertEqual(
+            [(item["from_bunsetsu"], item["to_bunsetsu"]) for item in body["relations"]],
+            [(1, 3), (2, 3)],
+        )
+        self.assertEqual(body["roots"], [3])
+        self.assertEqual(body["sentences"][0]["text"], "日本語を勉強します")
+
+    def test_post_bunsetsu_rejects_missing_token_id(self):
+        response = self.client.post("/api/v1/nlp/bunsetsu", json=[{"orth": "日本語", "head_absolute": 0, "dep": "ROOT"}])
+        self.assertEqual(response.status_code, 422)
+
+    def test_post_bunsetsu_rejects_duplicate_token_ids(self):
+        response = self.client.post("/api/v1/nlp/bunsetsu", json=[{"id": 1, "orth": "日本語"}, {"id": 1, "orth": "を"}])
+        self.assertEqual(response.status_code, 422)
+
+    def test_post_bunsetsu_rejects_native_tokens_without_graph_metadata(self):
+        response = self.client.post(
+            "/api/v1/nlp/bunsetsu",
+            json=[{"id": 1, "orth": "日本語", "head": 0, "dep": "ROOT"}],
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_post_bunsetsu_empty_array_returns_empty_graph(self):
+        response = self.client.post("/api/v1/nlp/bunsetsu", json=[])
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["bunsetsu"], [])
+        self.assertEqual(body["relations"], [])
+        self.assertEqual(body["roots"], [])
+        self.assertEqual(body["sentences"], [])
+
+    def test_legacy_text_payload_is_rejected(self):
         response = self.client.post(
             "/api/v1/nlp/tokens",
             json={"text": "日本語を勉強します。"},
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 422)
 
 
 if __name__ == "__main__":
