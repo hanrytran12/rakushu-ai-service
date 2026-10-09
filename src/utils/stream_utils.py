@@ -143,7 +143,7 @@ def push_oovs_to_backend(oovs: List[Any], logger: Any = None) -> int:
                 data=data_bytes,
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=500) as resp:
                 if logger:
                     logger.info(f"[OOV Ingest] Successfully pushed {len(payload)} OOV candidate(s) to Backend API at {base_url} ({resp.status}).")
                 return len(payload)
