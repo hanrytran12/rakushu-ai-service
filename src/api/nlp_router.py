@@ -1,13 +1,21 @@
-"""Read-only APIs for NLP outputs produced by a completed video pipeline."""
+"""Read-only and standalone POST APIs for NLP token and Bunsetsu output."""
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, status
 
+from src.api.api_models import TranscriptionRequest
+from src.api.nlp_output_formatter import (
+    build_bunsetsu_response,
+    build_tokens_response,
+)
+from src.models import SubtitleSegment
 from src.services.bunsetsu_graph_service import BunsetsuGraphService
+from src.services.nlp_service import NlpService
 from src.services.pipeline_output_store import pipeline_output_store
 
 router = APIRouter(prefix="/api/v1/nlp", tags=["NLP Output"])
 _bunsetsu_graph_service = BunsetsuGraphService()
+_nlp_service = NlpService()
 
 
 def _get_completed_output(video_id: str) -> Dict[str, Any]:
@@ -20,92 +28,120 @@ def _get_completed_output(video_id: str) -> Dict[str, Any]:
     return output
 
 
-def _flatten_ginza_tokens(sentences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Flatten the exact token objects emitted by GiNZA's JSON formatter."""
-    tokens: List[Dict[str, Any]] = []
-    for sentence in sentences:
-        ginza_json = sentence.get("nlp", {}).get("ginza_json", {})
-        for paragraph in ginza_json.get("paragraphs", []):
-            for ginza_sentence in paragraph.get("sentences", []):
-                tokens.extend(ginza_sentence.get("tokens", []))
-    return tokens
+def _validate_raw_tokens(tokens: List[Dict[str, Any]]) -> None:
+    """Reject token payloads that cannot safely form a Bunsetsu graph."""
+    seen_ids = set()
+    for index, token in enumerate(tokens):
+        token_id = token.get("id")
+        if not isinstance(token_id, int) or isinstance(token_id, bool) or token_id < 1:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].id must be a positive integer.",
+            )
+        if token_id in seen_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].id duplicates another token id.",
+            )
+        seen_ids.add(token_id)
+        if not isinstance(token.get("orth"), str):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].orth must be a string.",
+            )
+        head_id = token.get("head_absolute")
+        if not isinstance(head_id, int) or isinstance(head_id, bool):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].head_absolute must be an integer.",
+            )
+        label = token.get("bunsetu_bi_label")
+        if not isinstance(label, str) or label not in {"B", "I"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].bunsetu_bi_label must be 'B' or 'I'.",
+            )
+        if not isinstance(token.get("dep"), str):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].dep must be a string.",
+            )
+        if not isinstance(token.get("bunsetu_position_type"), str):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].bunsetu_position_type must be a string.",
+            )
+
+
+    token_ids = {token["id"] for token in tokens}
+    for index, token in enumerate(tokens):
+        head_id = token["head_absolute"]
+        if head_id != 0 and head_id not in token_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"tokens[{index}].head_absolute references an unknown token id.",
+            )
 
 
 @router.get("/videos/{video_id}/tokens")
 def get_pipeline_tokens(video_id: str) -> Dict[str, Any]:
-    """Return the GiNZA token analysis already produced by the completed pipeline."""
+    """Return GiNZA token analysis already produced by a completed pipeline."""
     output = _get_completed_output(video_id)
-    ginza_documents = [
-        sentence["nlp"]["ginza_full"]
-        for sentence in output["sentences"]
-    ]
-    return {
-        "success": True,
-        "video_id": video_id,
-        "format": "ginza-json",
-        "ginza": ginza_documents,
-        "tokens": _flatten_ginza_tokens(output["sentences"]),
-    }
+    return build_tokens_response(video_id, output["sentences"])
+
+
+@router.post("/tokens")
+def post_tokens(request: TranscriptionRequest) -> Dict[str, Any]:
+    """Analyze supplied Japanese transcription without running the video pipeline."""
+    transcription = request.transcription.strip()
+    if not transcription:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="transcription must not be blank.",
+        )
+
+    sentences = []
+    for index, sentence_text in enumerate(
+        _nlp_service.split_sentences(transcription), start=1
+    ):
+        analysis = _nlp_service.analyze_json(SubtitleSegment(text=sentence_text))
+        sentences.append({
+            "sentence_number": index,
+            "text": sentence_text,
+            "nlp": analysis,
+        })
+
+    output_format = (
+        sentences[0]["nlp"].get("format", "ginza-json")
+        if sentences else "ginza-json"
+    )
+    return build_tokens_response(None, sentences, output_format=output_format)
 
 
 @router.get("/videos/{video_id}/bunsetsu")
 def get_pipeline_bunsetsu(video_id: str) -> Dict[str, Any]:
     """Build Bunsetsu and dependency relations from stored GiNZA token JSON."""
     output = _get_completed_output(video_id)
-    sentences = []
+    return build_bunsetsu_response(
+        video_id, output["sentences"], _bunsetsu_graph_service
+    )
 
-    all_bunsetsu: List[Dict[str, Any]] = []
-    all_relations: List[Dict[str, Any]] = []
-    all_roots: List[int] = []
-    bunsetsu_offset = 0
 
-    for sentence in output["sentences"]:
-        graph = _bunsetsu_graph_service.build(
-            sentence.get("nlp", {}).get("tokens", [])
-        )
-        sentence_bunsetsu = graph["bunsetsu"]
-        sentence_relations = graph["relations"]
-        sentence_roots = graph["roots"]
+@router.post("/bunsetsu")
+def post_bunsetsu(
+    tokens: List[Dict[str, Any]] = Body(
+        ..., description="Raw array of normalized GiNZA token objects"
+    ),
+) -> Dict[str, Any]:
+    """Build a Bunsetsu graph directly from normalized token objects."""
+    _validate_raw_tokens(tokens)
+    if not tokens:
+        return build_bunsetsu_response(None, [], _bunsetsu_graph_service)
 
-        for bunsetsu in sentence_bunsetsu:
-            local_id = bunsetsu["id"]
-            global_id = bunsetsu_offset + local_id
-            bunsetsu["id"] = global_id
-            bunsetsu["sentence_number"] = sentence["sentence_number"]
-            bunsetsu["sentence_text"] = sentence["text"]
-            if bunsetsu["dep"]["to"]:
-                bunsetsu["dep"]["to"] += bunsetsu_offset
-            bunsetsu["children"] = [
-                child + bunsetsu_offset for child in bunsetsu["children"]
-            ]
-            for case_frame in bunsetsu["case_frame"]:
-                case_frame["bunsetsu"] += bunsetsu_offset
-
-        for relation in sentence_relations:
-            relation["sentence_number"] = sentence["sentence_number"]
-            relation["from_bunsetsu"] += bunsetsu_offset
-            relation["to_bunsetsu"] += bunsetsu_offset
-
-        global_sentence_roots = [
-            root + bunsetsu_offset for root in sentence_roots
-        ]
-        all_roots.extend(global_sentence_roots)
-        all_bunsetsu.extend(sentence_bunsetsu)
-        all_relations.extend(sentence_relations)
-        sentences.append({
-            "sentence_number": sentence["sentence_number"],
-            "text": sentence["text"],
-            "bunsetsu": sentence_bunsetsu,
-            "relations": sentence_relations,
-            "roots": global_sentence_roots,
-        })
-        bunsetsu_offset += len(sentence_bunsetsu)
-
-    return {
-        "success": True,
-        "video_id": video_id,
-        "bunsetsu": all_bunsetsu,
-        "relations": all_relations,
-        "roots": all_roots,
-        "sentences": sentences,
+    sentence_text = "".join(token["orth"] for token in tokens)
+    sentence = {
+        "sentence_number": 1,
+        "text": sentence_text,
+        "nlp": {"tokens": tokens},
     }
+    return build_bunsetsu_response(None, [sentence], _bunsetsu_graph_service)

@@ -9,6 +9,15 @@ class ProcessUrlRequest(BaseModel):
     max_duration_seconds: Optional[int] = Field(default=600, description="Max allowed video duration in seconds")
 
 
+class TranscriptionRequest(BaseModel):
+    """Payload for standalone NLP tokenization."""
+    transcription: str = Field(
+        ...,
+        min_length=1,
+        description="Japanese transcription to tokenize and analyze",
+    )
+
+
 class TokenItem(BaseModel):
     surface: str
     reading: Optional[str] = ""
